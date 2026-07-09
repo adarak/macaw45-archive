@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>macaw45 VOD archive</title>
+<link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+<script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
+<style>
+:root{
+  --bg:#0f0f0f; --bg2:#181818; --card:#1c1c1c; --text:#f1f1f1; --muted:#aaaaaa;
+  --accent:#3ea6ff; --border:#2a2a2a; --radius:12px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:"Roboto","Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+}
+a{color:inherit; text-decoration:none}
+
+header.site{
+  display:flex; align-items:baseline; gap:12px;
+  padding:14px 20px; border-bottom:1px solid var(--border);
+  position:sticky; top:0; z-index:20;
+  background:rgba(15,15,15,.92); backdrop-filter:blur(8px);
+}
+header.site h1{font-size:18px; margin:0; font-weight:700; letter-spacing:.3px; cursor:pointer}
+header.site h1:hover{color:var(--accent)}
+header.site .sub{color:var(--muted); font-size:13px}
+
+.wrap{max-width:1280px; margin:0 auto; padding:24px 20px 80px}
+
+/* ---------- featured player ---------- */
+.featured{margin-bottom:28px}
+.stage{display:flex; gap:14px; align-items:flex-start}
+.stage .player-shell{flex:1; min-width:0}
+.player-shell{
+  position:relative; width:100%; background:#000;
+  border-radius:var(--radius); overflow:hidden; aspect-ratio:16/9;
+}
+.player-shell video{width:100%; height:100%; display:block; background:#000}
+.player-shell .video-js{width:100%; height:100%}
+
+/* live-style chat column beside the player (demo build) */
+.chat{
+  flex:none; width:340px; display:flex; flex-direction:column;
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+  overflow:hidden; aspect-ratio:auto;
+}
+.chat-head{
+  display:flex; align-items:baseline; justify-content:space-between; gap:8px;
+  padding:10px 12px; border-bottom:1px solid var(--border); flex:none;
+}
+.chat-title{font-size:13px; font-weight:700; letter-spacing:.3px}
+.chat-note{font-size:11px; color:var(--muted)}
+.chat-log{flex:1; min-height:0; overflow-y:auto; padding:8px 10px; font-size:13px; line-height:1.4}
+.chat-log::-webkit-scrollbar{width:8px}
+.chat-log::-webkit-scrollbar-thumb{background:#333; border-radius:4px}
+.cmsg{padding:3px 4px; border-radius:5px; word-wrap:break-word}
+.cmsg:hover{background:rgba(255,255,255,.04)}
+.cmsg.newsec{margin-top:2px}
+.cmsg .cu{font-weight:700}
+.cmsg .cb{margin-right:3px; font-size:11px}
+.cmsg .emote{height:24px; vertical-align:middle; margin:-2px 1px}
+.chat-empty{color:var(--muted); font-size:12px; padding:10px 4px; line-height:1.6}
+@media (max-width:920px){
+  .stage{flex-direction:column}
+  .chat{width:auto; height:320px}
+}
+.feat-title{font-size:22px; font-weight:700; margin:16px 0 10px; line-height:1.3}
+.feat-meta{display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; color:var(--muted); font-size:14px; margin-bottom:14px}
+.btn{
+  display:inline-flex; align-items:center; gap:6px;
+  background:var(--bg2); border:1px solid var(--border); color:var(--text);
+  border-radius:999px; padding:7px 14px; font-size:13px; cursor:pointer;
+  font-family:inherit; transition:background .15s,border-color .15s;
+}
+.btn:hover{background:#262626; border-color:#3a3a3a}
+.feat-desc{
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+  padding:14px 16px; color:#ddd; font-size:14px; line-height:1.55; white-space:pre-wrap;
+}
+
+/* ---------- toolbar ---------- */
+.controls{display:flex; flex-direction:column; gap:10px}
+.controls input[type=search]{
+  width:100%; background:var(--bg2); border:1px solid var(--border);
+  color:var(--text); border-radius:999px; padding:10px 16px; font-size:14px; outline:none;
+}
+.controls input[type=search]:focus{border-color:var(--accent)}
+.searchwrap{position:relative; display:flex}
+.searchwrap input[type=search]{padding-right:36px}
+.searchwrap input[type=search]::-webkit-search-cancel-button{display:none}
+.search-clear{
+  position:absolute; right:6px; top:50%; transform:translateY(-50%);
+  display:none; width:22px; height:22px; padding:0; border:0; border-radius:50%;
+  background:#333; color:var(--text); font-size:16px; line-height:1; cursor:pointer;
+  align-items:center; justify-content:center;
+}
+.search-clear:hover{background:#444}
+.searchwrap.has-text .search-clear{display:inline-flex}
+.controls select{
+  width:100%; background:var(--bg2); border:1px solid var(--border); color:var(--text);
+  border-radius:8px; padding:10px 12px; font-size:14px; cursor:pointer; font-family:inherit;
+}
+.count{color:var(--muted); font-size:13px; padding-left:2px}
+
+/* ---------- year sections + grid ---------- */
+.year-h{
+  font-size:30px; font-weight:800; color:var(--text); letter-spacing:.2px;
+  margin:72px 0 6px; padding-bottom:10px; border-bottom:1px solid var(--border);
+}
+#grid-wrap > .year-h:first-child{margin-top:8px}
+.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:20px 16px}
+.card{cursor:pointer; display:flex; flex-direction:column; gap:8px}
+.card .thumb{
+  position:relative; aspect-ratio:16/9; border-radius:var(--radius); overflow:hidden;
+  background:#222; box-shadow:0 0 0 1px var(--border) inset;
+}
+.card .thumb img{width:100%; height:100%; object-fit:cover; display:block; transition:transform .25s}
+.card:hover .thumb img{transform:scale(1.045)}
+.card.active .thumb{outline:2px solid var(--accent); outline-offset:0}
+.card .ctitle{
+  font-size:14px; font-weight:600; line-height:1.35;
+  display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.card .cmeta{font-size:12px; color:var(--muted)}
+
+/* title row + chat indicator (grey speech-bubble glyph + level bars, top-right) */
+.cbody{display:flex; align-items:flex-start; gap:8px}
+.cbody .ctitle{flex:1; min-width:0}
+.chatind{flex:none; display:inline-flex; align-items:center; gap:5px; margin-top:2px;
+  padding:5px 7px; border:1px solid var(--border); border-radius:7px}
+.chatglyph{display:block; color:var(--muted); position:relative; top:2px}
+.chatglyph .halo{fill:var(--bg); stroke:var(--bg); stroke-width:2}
+.chatmeter{display:block}
+.chatmeter rect{fill:#3a3a3a}
+.chatmeter rect.on{fill:#c8c8c8}
+.chatchip{display:inline-flex; align-items:center; gap:6px}
+
+.fine{color:#666; font-size:11px; margin-top:48px; text-align:center; line-height:1.7}
+.fine a{color:#888; text-decoration:underline}
+
+/* browse: grid + year nav */
+.browse{display:flex; gap:24px; align-items:flex-start}
+.grid-col{flex:1; min-width:0}
+.side{
+  width:240px; flex:none; position:sticky; top:66px;
+  max-height:calc(100vh - 86px); overflow:auto;
+  display:flex; flex-direction:column; gap:14px;
+}
+.year-h,.month-h,.card{scroll-margin-top:72px}
+.yh-count{font-weight:400; color:#777; font-size:13px; margin-left:6px}
+.month-h{font-size:19px; font-weight:700; color:var(--text); letter-spacing:.2px; margin:48px 0 14px}
+.year-h + .month-h{margin-top:16px}
+.mh-count{font-weight:400; color:#777; font-size:14px; margin-left:8px}
+.yearnav{
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+  padding:10px; font-size:13px;
+}
+.yn-title{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.6px; padding:4px 8px 10px}
+.yn-year{
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+  padding:7px 9px; border-radius:8px; cursor:pointer; font-weight:600;
+}
+.yn-year:hover{background:#262626}
+.yn-year.open{background:#242424; color:var(--accent)}
+.yn-count{color:var(--muted); font-weight:400; font-size:12px}
+.yn-year.open .yn-count{color:var(--accent)}
+.yn-months{display:flex; flex-direction:column; margin:2px 0 8px 10px; border-left:1px solid var(--border); padding-left:6px}
+.yn-month{display:flex; justify-content:space-between; gap:8px; padding:5px 9px; border-radius:6px; cursor:pointer; color:var(--muted)}
+.yn-month:hover{background:#262626; color:var(--text)}
+@media (max-width:860px){
+  .browse{flex-direction:column}
+  .side{order:-1; width:auto; position:static; max-height:none; overflow:visible}
+  .yearnav{display:none}
+}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <h1 id="home" title="Home — reset filters">macaw45 VOD archive</h1>
+  <span class="sub">VOD archive</span>
+</header>
+
+<div class="wrap">
+  <section class="featured">
+    <div class="stage" id="stage">
+      <div class="player-shell" id="player-shell"></div>
+      <aside class="chat" id="chat" hidden>
+        <div class="chat-head">
+          <span class="chat-title">Stream chat</span>
+          <span class="chat-note" id="chat-note"></span>
+        </div>
+        <div class="chat-log" id="chat-log"></div>
+      </aside>
+    </div>
+    <h2 class="feat-title" id="feat-title"></h2>
+    <div class="feat-meta" id="feat-meta"></div>
+    <div class="feat-desc" id="feat-desc"></div>
+  </section>
+
+  <div class="browse">
+    <div class="grid-col"><div id="grid-wrap"></div></div>
+    <aside class="side">
+      <div class="controls">
+        <div class="searchwrap">
+          <input type="search" id="search" placeholder="Search title or description..." />
+          <button type="button" class="search-clear" id="search-clear" aria-label="Clear search">&times;</button>
+        </div>
+        <select id="sort">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="chat">Most chatted</option>
+        </select>
+        <span class="count" id="count"></span>
+      </div>
+      <nav class="yearnav" id="yearnav"></nav>
+    </aside>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+(function(){
+
+// ============================================================================
+//  CONFIG  — the only part tied to your site. Everything below it is generic.
+// ============================================================================
+
+// This page is served from the same site as the archive data, so every URL is
+// relative. videos.json, tn/, playlists/ and comments/ are read live.
+// If you host video.js yourself, swap the two CDN tags in <head> for your copies.
+const BASE = '';
+const CHAT_ENABLED = true;   // set false to hide the chat column
+
+let VIDEOS = [];             // loaded from videos.json at boot (bottom of file)
+
+function videoSourceHtml(v){
+  // HLS via video.js (loaded in <head>, initialised in renderFeatured()).
+  return '<video id="player" class="video-js" controls playsinline preload="auto"'
+       + ' poster="tn/720/' + v.vodid + '.webp">'
+       + '<source src="playlists/v' + v.vodid + '.m3u8" type="application/x-mpegURL"></video>';
+}
+
+const thumbUrl    = (v, size) => 'tn/' + size + '/' + v.vodid + '.webp';
+const downloadUrl = (v)       => 'videos/v' + v.vodid + '.mp4';
+
+// ============================================================================
+//  SHARED CODE  (identical for local file and live site)
+// ============================================================================
+
+const byId = {};   // populated from VIDEOS in init(), once the catalog loads
+
+const state = { current:null, sort:'newest', query:'', expandedYear:null };
+
+const shell    = document.getElementById('player-shell');
+const titleEl  = document.getElementById('feat-title');
+const metaEl   = document.getElementById('feat-meta');
+const descEl   = document.getElementById('feat-desc');
+const gridWrap = document.getElementById('grid-wrap');
+const countEl  = document.getElementById('count');
+const searchEl = document.getElementById('search');
+const clearEl  = document.getElementById('search-clear');
+const sortEl   = document.getElementById('sort');
+const chatEl   = document.getElementById('chat');
+const chatLog  = document.getElementById('chat-log');
+const chatNote = document.getElementById('chat-note');
+
+const esc = (s) => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+const yearOf = (s) => (s || '').slice(0,4) || '????';
+
+function fmtDate(s){
+  try {
+    if (/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s)) {
+      return new Date(s).toLocaleString(undefined, { year:'numeric', month:'short', day:'numeric' });
+    }
+    const m = /(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (m) return new Date(m[1]+'-'+m[2]+'-'+m[3]+'T00:00:00Z')
+      .toLocaleString(undefined, { timeZone:'UTC', year:'numeric', month:'short', day:'numeric' });
+  } catch (e) {}
+  return s || '';
+}
+
+function byNewest(a,b){ return a.date > b.date ? -1 : a.date < b.date ? 1 : 0; }
+
+let vjs = null;
+function renderFeatured(v){
+  document.title = v.title + ' | macaw45 archive';
+  if (vjs){ try { vjs.dispose(); } catch (e) {} vjs = null; }
+  shell.innerHTML = videoSourceHtml(v);
+  if (window.videojs) vjs = videojs(shell.querySelector('video'));
+  setupChat(v);
+
+  titleEl.textContent = v.title;
+  descEl.textContent  = v.description || '(no description)';
+
+  const bareDate = (v.date || '').slice(0,10);
+  const chatChip = (typeof v.chat === 'number')
+    ? '<span class="chatchip">' + chatIndicator(v) + ' ' + CHAT_LABELS[chatLevel(v)] + '</span>' : '';
+  metaEl.innerHTML =
+      '<span>' + esc(fmtDate(v.date)) + '</span>'
+    + chatChip
+    + '<a class="btn" href="' + downloadUrl(v) + '" download="' + esc(bareDate + ' ' + v.title + ' [' + v.vodid + ']') + '">⤓ Download</a>';
+}
+
+// Cap the chat column to the player's rendered height so it scrolls internally
+// instead of stretching the row (the player's height comes from its aspect-ratio,
+// which CSS can't hand to a fixed-width sibling — so measure it).
+function sizeChat(){
+  if (chatEl.hidden) return;
+  if (window.innerWidth <= 920){ chatEl.style.height = ''; return; }  // stacked: CSS height wins
+  const h = shell.getBoundingClientRect().height;
+  if (h) chatEl.style.height = h + 'px';
+}
+window.addEventListener('resize', sizeChat);
+
+// Chat replay: as the video plays we fetch that VOD's per-second comment files
+// (comments/<id>/<t>.json) and append them, in sync with the player's time.
+// Seeking backward rebuilds the log up to the new point. (If you already have a
+// chat renderer on your site, you can drop it in here instead.)
+const HEX   = /^#[0-9a-fA-F]{6}$/;
+const EMOTE = id => 'https://static-cdn.jtvnw.net/emoticons/v2/' + id + '/default/dark/1.0';
+const BADGE = { broadcaster:'🔴', moderator:'🗡️', vip:'💎', 'sub-gifter':'🎁',
+  subscriber:'⭐', premium:'👑', turbo:'⚡', founder:'🥇', partner:'✔️' };
+
+function msgBody(m){
+  const f = m && m.fragments;
+  if (Array.isArray(f) && f.length){
+    return f.map(x => (x.emoticon && x.emoticon.emoticon_id)
+      ? '<img class="emote" src="' + EMOTE(x.emoticon.emoticon_id) + '" alt="' + esc(x.text) + '">'
+      : esc(x.text)).join('');
+  }
+  return esc(m && m.body || '');
+}
+function commentToHtml(c){
+  const m = c.message || {};
+  const color  = HEX.test(m.user_color || '') ? m.user_color : '#dcdcdc';
+  const badges = (m.user_badges || []).map(b => BADGE[b._id]).filter(Boolean)
+    .map(b => '<span class="cb">' + b + '</span>').join('');
+  const user   = (c.commenter && (c.commenter.display_name || c.commenter.name)) || '?';
+  return '<div class="cmsg">' + badges
+    + '<span class="cu" style="color:' + color + '">' + esc(user) + '</span>'
+    + '<span class="cc" style="color:var(--muted)">: </span>' + msgBody(m) + '</div>';
+}
+function setupChat(v){
+  if (!CHAT_ENABLED){ chatEl.hidden = true; return; }
+  chatEl.hidden = false;
+  requestAnimationFrame(sizeChat);   // pin height once layout settles
+  chatNote.textContent = '';
+  chatLog.innerHTML = '<div class="chat-empty">Press play to replay chat in sync with the video.</div>';
+
+  const video = shell.querySelector('video');
+  let lastSec = -1, stick = true, active = null, busy = false, cleared = false;
+  chatLog.addEventListener('scroll', () => {
+    stick = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 40;
+  });
+  // index of seconds that actually have chat, so we skip fetching empty ones
+  fetch(BASE + 'comments/' + v.vodid + '.json')
+    .then(r => r.ok ? r.json() : []).then(a => { active = new Set(a); })
+    .catch(() => { active = new Set(); });
+
+  async function tick(){
+    if (!video || busy) return;
+    const cur = Math.floor(video.currentTime || 0);
+    if (cur === lastSec) return;
+    busy = true;
+    if (!cleared || cur < lastSec){ chatLog.innerHTML = ''; cleared = true; if (cur < lastSec) lastSec = -1; }
+    const from = lastSec + 1; lastSec = cur;
+    for (let s = from; s <= cur; s++){
+      if (active && !active.has(s)) continue;
+      try {
+        const msgs = await (await fetch(BASE + 'comments/' + v.vodid + '/' + s + '.json')).json();
+        for (const c of (Array.isArray(msgs) ? msgs : []))
+          chatLog.insertAdjacentHTML('beforeend', commentToHtml(c));
+      } catch (e) {}
+    }
+    if (stick) chatLog.scrollTop = chatLog.scrollHeight;
+    busy = false;
+  }
+  video.addEventListener('timeupdate', tick);
+}
+
+function cardHtml(v){
+  const ind = (typeof v.chat === 'number') ? chatIndicator(v) : '';
+  return '<div class="card" data-id="' + v.vodid + '" data-ym="' + (v.date||'').slice(0,7) + '">'
+    +   '<div class="thumb"><img loading="lazy" alt="" src="' + thumbUrl(v,'720') + '"'
+    +     ' onerror="this.style.visibility=\'hidden\'"></div>'
+    +   '<div class="cbody"><div class="ctitle">' + esc(v.title) + '</div>' + ind + '</div>'
+    +   '<div class="cmeta">' + esc(fmtDate(v.date)) + '</div>'
+    + '</div>';
+}
+
+function renderGrid(){
+  const terms = state.query.toLowerCase().split(/\s+/).filter(Boolean);
+  let list = VIDEOS.filter(v => {
+    if (!terms.length) return true;
+    const hay = (v.title + ' ' + (v.description || '')).toLowerCase();
+    return terms.every(t => hay.includes(t));
+  });
+
+  if (state.sort === 'oldest')      list.sort((a,b) => -byNewest(a,b));
+  else if (state.sort === 'chat')   list.sort((a,b) => (b.chat||0) - (a.chat||0) || byNewest(a,b));
+  else                              list.sort(byNewest);
+
+  countEl.textContent = list.length + ' video' + (list.length === 1 ? '' : 's');
+
+  // Year sections (and the year nav) only make sense for date-ordered views.
+  const flat = (state.sort === 'chat');
+
+  if (!list.length){
+    gridWrap.innerHTML = '<div class="count">no matches</div>';
+    renderYearNav([], true);
+    return;
+  }
+
+  if (flat){
+    gridWrap.innerHTML = '<div class="grid">' + list.map(cardHtml).join('') + '</div>';
+  } else {
+    const groups = [];
+    let cur = null;
+    for (const v of list){
+      const y = yearOf(v.date);
+      if (!cur || cur.year !== y){ cur = { year:y, items:[] }; groups.push(cur); }
+      cur.items.push(v);
+    }
+    gridWrap.innerHTML = groups.map(g => {
+      // sub-group each year into months, preserving order
+      const months = [];
+      let cm = null;
+      for (const v of g.items){
+        const ym = (v.date||'').slice(0,7);
+        if (!cm || cm.ym !== ym){ cm = { ym, items:[] }; months.push(cm); }
+        cm.items.push(v);
+      }
+      return '<div class="year-h" id="y-' + g.year + '">' + esc(g.year)
+        +   ' <span class="yh-count">' + g.items.length + ' video' + (g.items.length===1?'':'s') + '</span></div>'
+        + months.map(m =>
+            '<div class="month-h" id="m-' + m.ym + '">' + monthNameFull(m.ym) + ' ' + g.year
+          +   ' <span class="mh-count">' + m.items.length + '</span></div>'
+          + '<div class="grid">' + m.items.map(cardHtml).join('') + '</div>'
+          ).join('');
+    }).join('');
+  }
+
+  gridWrap.querySelectorAll('.card').forEach(el => {
+    el.addEventListener('click', () => selectVideo(el.getAttribute('data-id')));
+  });
+  markActive();
+  renderYearNav(list, flat);
+}
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function monthName(ym){ const i = parseInt(ym.slice(5,7),10) - 1; return MONTHS[i] || ym; }
+function monthNameFull(ym){ const i = parseInt(ym.slice(5,7),10) - 1; return MONTHS_FULL[i] || ym; }
+
+// Chat activity is shown as a 5-level indicator instead of a raw count (the raw
+// number is chat-SECONDS, which reads as false precision). Ordering still uses
+// the raw value; these tiers are quartiles of the non-zero distribution.
+const CHAT_LABELS = ['No chat', 'Light chat', 'Moderate chat', 'Heavy chat', 'Very heavy chat'];
+let chatCutoffs = [0, 0, 0];
+function computeChatCutoffs(){
+  const nz = VIDEOS.map(v => v.chat || 0).filter(n => n > 0).sort((a,b) => a - b);
+  const q = p => nz.length ? nz[Math.floor((nz.length - 1) * p)] : 0;
+  chatCutoffs = [q(0.25), q(0.5), q(0.75)];
+}
+function chatLevel(v){
+  const c = v.chat || 0;
+  if (c <= 0) return 0;
+  if (c < chatCutoffs[0]) return 1;
+  if (c < chatCutoffs[1]) return 2;
+  if (c < chatCutoffs[2]) return 3;
+  return 4;
+}
+// Chat activity: a signal-bar meter (the level) with a static grey speech-bubble
+// glyph beside it to say what the bars mean. Ordering still uses raw counts.
+function chatMeter(v){
+  const lv = chatLevel(v), H = [5,8,11,14];
+  let rects = '';
+  for (let i = 0; i < 4; i++){
+    rects += '<rect class="' + (i < lv ? 'on' : '') + '" x="' + (i*6) + '" y="' + (14 - H[i])
+           + '" width="4" height="' + H[i] + '" rx="1"/>';
+  }
+  return '<svg class="chatmeter" width="22" height="14" viewBox="0 0 22 14">' + rects + '</svg>';
+}
+function chatGlyph(){
+  // two overlapping speech bubbles; front bubble gets a bg-coloured halo (stroke)
+  // so it reads as separate from the back one
+  const B = 'M2.5 0 H8.5 A2.5 2.5 0 0 1 11 2.5 V5.5 A2.5 2.5 0 0 1 8.5 8 H5 L2 11 V8 A2.5 2.5 0 0 1 0 5.5 V2.5 A2.5 2.5 0 0 1 2.5 0 Z';
+  return '<svg class="chatglyph" width="15" height="12" viewBox="0 0 20 16" aria-hidden="true">'
+    + '<g transform="translate(9,0)"><path fill="currentColor" d="' + B + '"/></g>'
+    + '<g transform="translate(0,5)"><path class="halo" d="' + B + '"/><path fill="currentColor" d="' + B + '"/></g>'
+    + '</svg>';
+}
+function chatIndicator(v){
+  const label = CHAT_LABELS[chatLevel(v)];
+  return '<span class="chatind" title="' + label + '" aria-label="' + label + '">'
+       + chatGlyph() + chatMeter(v) + '</span>';
+}
+
+function renderYearNav(list, flat){
+  const nav = document.getElementById('yearnav');
+  if (flat || !list.length){ nav.style.display = 'none'; nav.innerHTML = ''; return; }
+  nav.style.display = '';
+
+  // group by year -> months, preserving the list's (already sorted) order
+  const years = new Map();
+  for (const v of list){
+    const y = yearOf(v.date), ym = (v.date||'').slice(0,7);
+    if (!years.has(y)) years.set(y, { count:0, months:new Map() });
+    const yr = years.get(y);
+    yr.count++;
+    yr.months.set(ym, (yr.months.get(ym)||0) + 1);
+  }
+
+  let html = '<div class="yn-title">Jump to</div>';
+  for (const [y, yr] of years){
+    const open = state.expandedYear === y;
+    html += '<div class="yn-year' + (open ? ' open' : '') + '" data-year="' + y + '">'
+          +   '<span>' + y + '</span><span class="yn-count">' + yr.count + '</span></div>';
+    if (open){
+      html += '<div class="yn-months">';
+      for (const [ym, c] of yr.months){
+        html += '<div class="yn-month" data-ym="' + ym + '"><span>' + monthName(ym)
+              + '</span><span class="yn-count">' + c + '</span></div>';
+      }
+      html += '</div>';
+    }
+  }
+  nav.innerHTML = html;
+
+  nav.querySelectorAll('.yn-year').forEach(el => el.addEventListener('click', () => {
+    const y = el.getAttribute('data-year');
+    state.expandedYear = (state.expandedYear === y) ? null : y;
+    renderYearNav(list, flat);
+    const sec = document.getElementById('y-' + y);
+    if (sec) sec.scrollIntoView({ behavior:'smooth', block:'start' });
+  }));
+  nav.querySelectorAll('.yn-month').forEach(el => el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const ym = el.getAttribute('data-ym');
+    const target = document.getElementById('m-' + ym)
+                || gridWrap.querySelector('.card[data-ym="' + ym + '"]');
+    if (target) target.scrollIntoView({ behavior:'smooth', block:'start' });
+  }));
+}
+
+function markActive(){
+  gridWrap.querySelectorAll('.card').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('data-id') === String(state.current));
+  });
+}
+
+function selectVideo(id, push){
+  const v = byId[String(id)];
+  if (!v) return;
+  state.current = String(id);
+  if (push !== false && location.hash.slice(1) !== state.current){
+    location.hash = state.current;
+  }
+  renderFeatured(v);
+  markActive();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+// events
+function syncSearch(){
+  state.query = searchEl.value.trim();
+  clearEl.parentElement.classList.toggle('has-text', searchEl.value.length > 0);
+  renderGrid();
+}
+searchEl.addEventListener('input', syncSearch);
+clearEl.addEventListener('click', () => { searchEl.value = ''; syncSearch(); searchEl.focus(); });
+sortEl.addEventListener('change', () => { state.sort = sortEl.value; renderGrid(); });
+
+function goHome(){
+  searchEl.value = '';
+  state.query = '';
+  state.sort = 'newest';
+  sortEl.value = 'newest';
+  state.expandedYear = null;
+  clearEl.parentElement.classList.remove('has-text');
+  renderGrid();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+document.getElementById('home').addEventListener('click', goHome);
+window.addEventListener('hashchange', () => {
+  const id = location.hash.slice(1);
+  if (id && byId[id] && id !== state.current) selectVideo(id, false);
+});
+
+// boot: load the catalog from this origin, then start.
+function init(){
+  for (const v of VIDEOS) byId[String(v.vodid)] = v;
+  computeChatCutoffs();
+  const first = VIDEOS.slice().sort(byNewest)[0].vodid;
+  const fromHash = location.hash.slice(1);
+  selectVideo((fromHash && byId[fromHash]) ? fromHash : first, false);
+  renderGrid();
+}
+fetch(BASE + 'videos.json')
+  .then(r => r.json())
+  .then(json => { VIDEOS = json; init(); })
+  .catch(() => {
+    document.querySelector('.wrap').innerHTML =
+      '<p style="color:#f66;padding:20px">Couldn\'t load videos.json — serve this page from your site '
+      + '(in the same folder as the archive data), not by double-clicking.</p>';
+  });
+
+})();
+</script>
+</body>
+</html>
