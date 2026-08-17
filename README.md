@@ -21,7 +21,6 @@ Notes:
 - Video uses **video.js** (loaded from its CDN in `<head>`). Hosting it yourself?
   Swap those two `<head>` tags for your copies.
 - All the wiring lives in the small **CONFIG** block at the top of the `<script>`.
-- Don't double-click it locally — a file:// page can't fetch your data. Serve it.
 
 ## Optional: "Most chatted" sort + meter
 Add one field per entry in `videos.json`:
