@@ -23,9 +23,12 @@ a{color:inherit; text-decoration:none}
 header.site{
   display:flex; align-items:center; gap:12px;
   padding:14px 20px; border-bottom:1px solid var(--border);
-  position:sticky; top:0; z-index:20;
-  background:rgba(15,15,15,.92); backdrop-filter:blur(8px);
+  background:var(--bg);
+  overflow:hidden; max-height:120px;
+  transition:max-height .3s ease, padding .3s ease, opacity .25s ease, border-color .3s ease;
 }
+/* collapsed while a video plays on mobile (JS toggles .collapsed only on phones) */
+header.site.collapsed{max-height:0; padding-top:0; padding-bottom:0; opacity:0; border-bottom-color:transparent}
 header.site h1{font-size:18px; margin:0; font-weight:700; letter-spacing:.3px; cursor:pointer}
 header.site .site-logo{width:34px; height:34px; border-radius:50%; object-fit:cover; cursor:pointer; flex:none}
 header.site .site-contact{margin-left:auto; text-align:right; color:var(--muted); font-size:11px; line-height:1.55; max-width:52%}
@@ -83,15 +86,13 @@ header.site .sub{color:var(--muted); font-size:13px}
   .stage{flex-direction:column}
   .chat{width:auto; height:320px}
 }
-/* Fullscreen view: rounded video + rounded chat capsule side by side, padded off the edges. */
-.stage:fullscreen{width:100vw; height:100vh; gap:16px; padding:16px; box-sizing:border-box; background:#000; align-items:stretch}
-.stage:fullscreen .player-shell{flex:1; height:auto; aspect-ratio:auto; border-radius:16px}
-.stage:fullscreen .chat{width:360px; height:auto !important; border-radius:16px; border:1px solid var(--border)}
-.stage:fullscreen .chat-head{display:none}
-.stage:-webkit-full-screen{width:100vw; height:100vh; gap:16px; padding:16px; box-sizing:border-box; background:#000; align-items:stretch}
-.stage:-webkit-full-screen .player-shell{flex:1; height:auto; aspect-ratio:auto; border-radius:16px}
-.stage:-webkit-full-screen .chat{width:360px; height:auto !important; border-radius:16px; border:1px solid var(--border)}
-.stage:-webkit-full-screen .chat-head{display:none}
+/* Desktop fullscreen view (the .in-fs class is added by JS on native fullscreen):
+   rounded video + rounded chat capsule side by side, padded off the edges.
+   Mobile uses native <video> fullscreen instead (no chat), so no mobile rules here. */
+.stage.in-fs{width:100%; height:100%; gap:16px; padding:16px; box-sizing:border-box; background:#000; align-items:stretch}
+.stage.in-fs .player-shell{flex:1; min-width:0; height:auto; aspect-ratio:auto; border-radius:16px}
+.stage.in-fs .chat{display:flex; width:360px; height:auto !important; border-radius:16px; border:1px solid var(--border)}
+.stage.in-fs .chat-head{display:none}
 
 /* our own player controls replace video.js's native bar */
 .player-shell .vjs-control-bar, .player-shell .vjs-big-play-button{display:none !important}
@@ -117,6 +118,35 @@ header.site .sub{color:var(--muted); font-size:13px}
 .vol::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:11px; height:11px; border-radius:50%; background:#ffab3d; border:none; cursor:pointer; box-shadow:0 0 3px rgba(0,0,0,.5)}
 .vol::-moz-range-thumb{width:11px; height:11px; border:none; border-radius:50%; background:#ffab3d; cursor:pointer; box-shadow:0 0 3px rgba(0,0,0,.5)}
 .vol::-moz-range-track{height:4px; border-radius:3px; background:rgba(255,255,255,.32)}
+/* Phone: chat defaults off (toggleable), collapsible volume, time only while scrubbing,
+   controls below the video, and the media goes full-bleed (no side padding / rounded corners). */
+@media (max-width:640px), (orientation:landscape) and (max-height:500px){
+  .chat.off{display:none}          /* stacked chat is fully removed when toggled off (no slide) */
+  .ctrl [data-a=mute], .ctrl .vol{display:none}   /* no volume UI on phones — use hardware buttons */
+  .ctrl .ctime{display:none}
+  .ctrl.scrubbing .ctime{display:inline}
+  /* controls attached below the video (normal flow) instead of overlaying it */
+  .stage:not(.in-fs) .player-shell{aspect-ratio:auto; display:flex; flex-direction:column}
+  .stage:not(.in-fs) .player-shell .video-js{height:auto; aspect-ratio:16/9}
+  .ctrl{position:static; left:auto; right:auto; bottom:auto; margin:0; align-self:stretch;
+    border:0; border-radius:0; box-shadow:none; background:var(--bg2);
+    backdrop-filter:none; -webkit-backdrop-filter:none; opacity:1 !important; pointer-events:auto; padding:10px 12px 11px}
+  /* full-bleed media: no top gap, video + chat run edge to edge, square corners */
+  .wrap{padding:0 16px 60px}
+  .stage{margin:0 -16px; gap:0; align-items:stretch}   /* stretch chat to full column width */
+  .player-shell{border-radius:0}
+  .chat{width:auto; align-self:stretch; border-radius:0; border-left:0; border-right:0}
+  /* bigger touch-friendly controls (~2x) on phones */
+  .ctrl{gap:12px; padding:13px 16px 15px}
+  .ctrl-row{gap:22px}
+  .ctrl .cbtn svg{width:32px; height:32px}
+  .ctrl .scrub{height:9px}
+  .ctrl .scrub-handle{width:22px; height:22px}
+  .ctrl .ctime{font-size:18px}
+  .vol{width:130px; height:7px}
+  .vol::-webkit-slider-thumb{width:19px; height:19px}
+  .vol::-moz-range-thumb{width:19px; height:19px}
+}
 .feat-title{font-size:22px; font-weight:700; margin:16px 0 10px; line-height:1.3}
 .feat-meta{display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center; color:var(--muted); font-size:14px; margin-bottom:14px}
 .btn{
@@ -137,7 +167,7 @@ header.site .sub{color:var(--muted); font-size:13px}
 .controls{display:flex; flex-direction:column; gap:10px}
 .controls input[type=search]{
   width:100%; background:var(--bg2); border:1px solid var(--border);
-  color:var(--text); border-radius:999px; padding:10px 16px; font-size:14px; outline:none;
+  color:var(--text); border-radius:999px; padding:10px 16px; font-size:16px; outline:none;
 }
 .controls input[type=search]:focus{border-color:var(--accent)}
 .searchwrap{position:relative; display:flex}
@@ -195,8 +225,8 @@ header.site .sub{color:var(--muted); font-size:13px}
 .browse{display:flex; gap:24px; align-items:flex-start}
 .grid-col{flex:1; min-width:0}
 .side{
-  width:240px; flex:none; position:sticky; top:86px;
-  max-height:calc(100vh - 106px); overflow:auto;
+  width:240px; flex:none; position:sticky; top:20px;
+  max-height:calc(100vh - 40px); overflow:auto;
   display:flex; flex-direction:column; gap:14px;
 }
 .year-h,.month-h,.card{scroll-margin-top:72px}
@@ -385,20 +415,55 @@ function copyLinkAtTime(v, btn){
 // Toggle chat via a class so it collapses/expands with a CSS transition (not display:none).
 function setChatVisible(on){ chatEl.classList.toggle('off', !on); }
 
+// Phone-sized viewport (portrait phone, or a short landscape phone).
+function isMobile(){ return window.matchMedia('(max-width:640px), (orientation:landscape) and (max-height:500px)').matches; }
+
+// Desktop: fullscreen the stage (video + chat side by side) via the .in-fs class.
+function enterFullscreenUI(){
+  const stage = document.getElementById('stage');
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+  if (!stage || (fsEl && fsEl !== stage)) return; // ignore native <video> fullscreen (mobile)
+  stage.classList.add('in-fs');
+  chatEl.style.height = '';                       // let CSS size the chat in fullscreen
+}
+function exitFullscreenUI(){
+  const stage = document.getElementById('stage');
+  if (stage) stage.classList.remove('in-fs');
+  requestAnimationFrame(sizeChat);                // re-pin chat to the player
+}
 function toggleStageFullscreen(){
   const stage = document.getElementById('stage');
   if (!stage) return;
-  if (document.fullscreenElement) (document.exitFullscreen || function(){}).call(document);
-  else (stage.requestFullscreen || stage.webkitRequestFullscreen || function(){}).call(stage);
+  // Mobile: fullscreen the raw <video> natively (works on iOS, where a <div> can't
+  // be fullscreened). No chat in this mode — enable native controls so there's a UI.
+  if (isMobile()){
+    const videoEl = shell.querySelector('video');
+    if (!videoEl) return;
+    videoEl.controls = true;
+    const clear = () => { videoEl.controls = false; };
+    videoEl.addEventListener('webkitendfullscreen', clear, { once: true });          // iOS
+    document.addEventListener('fullscreenchange', function h(){ if (!document.fullscreenElement){ clear(); document.removeEventListener('fullscreenchange', h); } });
+    if (typeof videoEl.webkitEnterFullscreen === 'function') videoEl.webkitEnterFullscreen();
+    else if (videoEl.requestFullscreen) videoEl.requestFullscreen();
+    else if (videoEl.webkitRequestFullscreen) videoEl.webkitRequestFullscreen();
+    return;
+  }
+  // Desktop: fullscreen the stage div (keeps the chat alongside).
+  if (document.fullscreenElement || document.webkitFullscreenElement){
+    (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
+    return;
+  }
+  (stage.requestFullscreen || stage.webkitRequestFullscreen || function(){}).call(stage);
 }
-// Let the chat fill the height via CSS in fullscreen; re-pin it to the player on exit.
 document.addEventListener('fullscreenchange', () => {
-  if (document.fullscreenElement) chatEl.style.height = '';
-  else requestAnimationFrame(sizeChat);
+  document.fullscreenElement ? enterFullscreenUI() : exitFullscreenUI();
+});
+document.addEventListener('webkitfullscreenchange', () => {
+  document.webkitFullscreenElement ? enterFullscreenUI() : exitFullscreenUI();
 });
 
 // ---- custom player controls (video.js is the engine; its native bar is hidden) ----
-let chatOn = true, curBar = null, ctrlHideT = null;
+let chatOn = !isMobile(), curBar = null, ctrlHideT = null;   // chat defaults off on phones
 const ICON_PLAY  = '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
 const ICON_PAUSE = '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
 const ICON_VOL   = '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg>';
@@ -430,6 +495,7 @@ document.addEventListener('keydown', (e) => {
   if (k === ' ' || k === 'k'){ e.preventDefault(); vjs.paused() ? vjs.play() : vjs.pause(); }
   else if (k === 'm'){ vjs.muted(!vjs.muted()); }
   else if (k === 'f'){ toggleStageFullscreen(); }
+  else if (k === 'Escape'){ const st = document.getElementById('stage'); if (st && st.classList.contains('faux-fs')) toggleStageFullscreen(); }
   else if (k === 'ArrowLeft'){ vjs.currentTime(Math.max(0, vjs.currentTime() - 15)); }
   else if (k === 'ArrowRight'){ vjs.currentTime(vjs.currentTime() + 15); }
 });
@@ -463,8 +529,9 @@ function setupControls(v){
   playBtn.addEventListener('click', () => p.paused() ? p.play() : p.pause());
   q('[data-a=back]').addEventListener('click', () => { p.currentTime(Math.max(0, p.currentTime() - 15)); showControls(); });
   q('[data-a=fwd]').addEventListener('click', () => { p.currentTime(Math.min(p.duration() || Infinity, p.currentTime() + 15)); showControls(); });
-  p.on('play', () => { playBtn.innerHTML = ICON_PAUSE; showControls(); });
-  p.on('pause', () => { playBtn.innerHTML = ICON_PLAY; bar.classList.remove('hide'); clearTimeout(ctrlHideT); });
+  const header = document.querySelector('header.site');
+  p.on('play', () => { playBtn.innerHTML = ICON_PAUSE; showControls(); if (header && isMobile()) header.classList.add('collapsed'); });
+  p.on('pause', () => { playBtn.innerHTML = ICON_PLAY; bar.classList.remove('hide'); clearTimeout(ctrlHideT); if (header) header.classList.remove('collapsed'); });
 
   const updMute = () => { muteBtn.innerHTML = (p.muted() || p.volume() === 0) ? ICON_MUTE : ICON_VOL; };
   const paintVol = () => {
@@ -473,7 +540,11 @@ function setupControls(v){
       + pct + '%, rgba(255,255,255,.32) ' + pct + '%, rgba(255,255,255,.32) 100%)';
   };
   vol.value = p.muted() ? 0 : p.volume();
-  muteBtn.addEventListener('click', () => p.muted(!p.muted()));
+  // On phones the volume bar is hidden; tapping the icon reveals it (drag to 0 = mute).
+  muteBtn.addEventListener('click', () => {
+    if (isMobile()){ bar.classList.toggle('vol-open'); showControls(); return; }
+    p.muted(!p.muted());
+  });
   vol.addEventListener('input', () => { const x = parseFloat(vol.value); p.volume(x); p.muted(x === 0); paintVol(); });
   p.on('volumechange', () => { vol.value = p.muted() ? 0 : p.volume(); updMute(); paintVol(); });
   updMute(); paintVol();
@@ -483,7 +554,10 @@ function setupControls(v){
     played.style.width = (f * 100) + '%';
     handle.style.left = (f * 100) + '%';
     try { buf.style.width = (d ? Math.min(1, p.bufferedEnd() / d) * 100 : 0) + '%'; } catch (e) {}
-    timeEl.textContent = fmtTime(p.currentTime()) + ' / ' + fmtTime(d);
+    // On phones, while scrubbing, show just the current time (the bar is otherwise hidden).
+    timeEl.textContent = (bar.classList.contains('scrubbing') && isMobile())
+      ? fmtTime(p.currentTime())
+      : fmtTime(p.currentTime()) + ' / ' + fmtTime(d);
   }
   p.on('timeupdate', paint); p.on('durationchange', paint); p.on('progress', paint); paint();
 
@@ -493,9 +567,9 @@ function setupControls(v){
     const f = Math.min(1, Math.max(0, (x - r.left) / r.width));
     const d = p.duration(); if (d) p.currentTime(f * d);
   };
-  scrub.addEventListener('pointerdown', (e) => { dragging = true; try { scrub.setPointerCapture(e.pointerId); } catch (_) {} seekTo(e.clientX); });
-  scrub.addEventListener('pointermove', (e) => { if (dragging) seekTo(e.clientX); });
-  scrub.addEventListener('pointerup', () => { dragging = false; });
+  scrub.addEventListener('pointerdown', (e) => { dragging = true; bar.classList.add('scrubbing'); try { scrub.setPointerCapture(e.pointerId); } catch (_) {} seekTo(e.clientX); paint(); });
+  scrub.addEventListener('pointermove', (e) => { if (dragging){ seekTo(e.clientX); paint(); } });
+  scrub.addEventListener('pointerup', () => { dragging = false; bar.classList.remove('scrubbing'); paint(); });
 
   chatBtn.classList.toggle('on', chatOn);
   chatBtn.addEventListener('click', () => {
@@ -538,6 +612,8 @@ function renderFeatured(v){
 // which CSS can't hand to a fixed-width sibling — so measure it).
 function sizeChat(){
   if (chatEl.classList.contains('off')) return;
+  const st = document.getElementById('stage');
+  if (st && st.classList.contains('in-fs')) return;   // CSS sizes the chat in fullscreen
   if (window.innerWidth <= 920){ chatEl.style.height = ''; return; }  // stacked: CSS height wins
   const h = shell.getBoundingClientRect().height;
   if (h) chatEl.style.height = h + 'px';
@@ -651,7 +727,7 @@ function setupChat(v){
     if (!video || busy) return;
     const cur = Math.floor(video.currentTime || 0);
     if (cur === lastSec) return;
-    if (!chatOn){ lastSec = cur; return; }   // chat toggled off: don't fetch
+    if (!chatOn || chatEl.offsetParent === null){ lastSec = cur; return; }   // toggled off / hidden (mobile): don't fetch
     busy = true;
     if (!cleared){ chatLog.innerHTML = ''; cleared = true; }
     let start = Math.max(cur - SEEK_WINDOW, lastSec + 1);
