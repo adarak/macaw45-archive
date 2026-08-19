@@ -131,6 +131,7 @@ header.site .sub{color:var(--muted); font-size:13px}
   .ctrl{position:static; left:auto; right:auto; bottom:auto; margin:0; align-self:stretch;
     border:0; border-radius:0; box-shadow:none; background:var(--bg2);
     backdrop-filter:none; -webkit-backdrop-filter:none; opacity:1 !important; pointer-events:auto; padding:10px 12px 11px}
+  .ctrl.hide{opacity:1 !important; pointer-events:auto}   /* phones: controls stay live below the video */
   /* full-bleed media: no top gap, video + chat run edge to edge, square corners */
   .wrap{padding:0 16px 60px}
   .stage{margin:0 -16px; gap:0; align-items:stretch}   /* stretch chat to full column width */
@@ -519,6 +520,7 @@ function setupControls(v){
     +   '<button class="cbtn" data-a="fs" title="Fullscreen with chat (f)">' + ICON_FS + '</button>'
     + '</div>';
   shell.appendChild(bar);
+  bar.addEventListener('click', (e) => e.stopPropagation());   // never let a button tap reach the video play/pause toggle
   curBar = bar;
 
   const q = (s) => bar.querySelector(s);
@@ -530,8 +532,17 @@ function setupControls(v){
   q('[data-a=back]').addEventListener('click', () => { p.currentTime(Math.max(0, p.currentTime() - 15)); showControls(); });
   q('[data-a=fwd]').addEventListener('click', () => { p.currentTime(Math.min(p.duration() || Infinity, p.currentTime() + 15)); showControls(); });
   const header = document.querySelector('header.site');
-  p.on('play', () => { playBtn.innerHTML = ICON_PAUSE; showControls(); if (header && isMobile()) header.classList.add('collapsed'); });
-  p.on('pause', () => { playBtn.innerHTML = ICON_PLAY; bar.classList.remove('hide'); clearTimeout(ctrlHideT); if (header) header.classList.remove('collapsed'); });
+  let mobileChatAuto = false;   // auto-open chat once on the first mobile play
+  p.on('play', () => {
+    playBtn.innerHTML = ICON_PAUSE; showControls();
+    if (header && isMobile()) header.classList.add('collapsed');
+    if (isMobile() && !mobileChatAuto && !chatOn){
+      mobileChatAuto = true;
+      chatOn = true; setChatVisible(true); chatBtn.classList.toggle('on', true);
+      requestAnimationFrame(sizeChat);
+    }
+  });
+  p.on('pause', () => { playBtn.innerHTML = ICON_PLAY; bar.classList.remove('hide'); clearTimeout(ctrlHideT); if (header && !isMobile()) header.classList.remove('collapsed'); });
 
   const updMute = () => { muteBtn.innerHTML = (p.muted() || p.volume() === 0) ? ICON_MUTE : ICON_VOL; };
   const paintVol = () => {
@@ -709,6 +720,8 @@ function setupChat(v){
   chatLog.innerHTML = '<div class="chat-empty">Press play to replay chat in sync with the video.</div>';
 
   const video = shell.querySelector('video');
+  const player = (typeof vjs !== 'undefined' && vjs) ? vjs : null;   // player time is reliable on iOS; raw <video> timeupdate isn't
+  const nowSec = () => Math.floor((player ? player.currentTime() : (video ? video.currentTime : 0)) || 0);
   let lastSec = -1, stick = true, active = null, busy = false, cleared = false;
   chatLog.addEventListener('scroll', () => {
     stick = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < 40;
@@ -724,10 +737,10 @@ function setupChat(v){
   // nobody scrolls chat back that far anyway.
   const SEEK_WINDOW = 5;
   async function tick(){
-    if (!video || busy) return;
-    const cur = Math.floor(video.currentTime || 0);
+    if ((!player && !video) || busy) return;
+    const cur = nowSec();
     if (cur === lastSec) return;
-    if (!chatOn || chatEl.offsetParent === null){ lastSec = cur; return; }   // toggled off / hidden (mobile): don't fetch
+    if (!chatOn){ lastSec = cur; return; }   // chat toggled off: don't fetch
     busy = true;
     if (!cleared){ chatLog.innerHTML = ''; cleared = true; }
     let start = Math.max(cur - SEEK_WINDOW, lastSec + 1);
@@ -744,7 +757,8 @@ function setupChat(v){
     if (stick) chatLog.scrollTop = chatLog.scrollHeight;
     busy = false;
   }
-  video.addEventListener('timeupdate', tick);
+  if (player){ player.on('timeupdate', tick); player.on('seeked', tick); }
+  if (video) video.addEventListener('timeupdate', tick);
 }
 
 function cardHtml(v){
