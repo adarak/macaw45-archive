@@ -55,10 +55,12 @@ header.site .sub{color:var(--muted); font-size:13px}
   flex:none; width:340px; display:flex; flex-direction:column;
   background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
   overflow:hidden; aspect-ratio:auto;
-  transition:width .28s ease, opacity .22s ease, border-width .28s ease;
+  transition:width .28s ease, height .28s ease, opacity .22s ease, border-width .28s ease;
 }
-/* graceful collapse when chat is toggled off (sibling player expands via flex) */
-.chat.off{width:0 !important; min-width:0; opacity:0; border-width:0; pointer-events:none}
+/* graceful collapse when chat is toggled off (sibling player expands via flex).
+   height:0 so an off chat never adds layout height — at width:0 its buffered
+   messages would otherwise wrap into a huge intrinsic height and stretch the row. */
+.chat.off{width:0 !important; height:0 !important; min-width:0; min-height:0; opacity:0; border-width:0; pointer-events:none}
 .chat-head{
   display:flex; align-items:baseline; justify-content:space-between; gap:8px;
   padding:10px 12px; border-bottom:1px solid var(--border); flex:none;
@@ -495,7 +497,6 @@ document.addEventListener('keydown', (e) => {
   const k = e.key;
   if (k === ' ' || k === 'k'){ e.preventDefault(); vjs.paused() ? vjs.play() : vjs.pause(); }
   else if (k === 'm'){ vjs.muted(!vjs.muted()); }
-  else if (k === 'f'){ toggleStageFullscreen(); }
   else if (k === 'Escape'){ const st = document.getElementById('stage'); if (st && st.classList.contains('faux-fs')) toggleStageFullscreen(); }
   else if (k === 'ArrowLeft'){ vjs.currentTime(Math.max(0, vjs.currentTime() - 15)); }
   else if (k === 'ArrowRight'){ vjs.currentTime(vjs.currentTime() + 15); }
