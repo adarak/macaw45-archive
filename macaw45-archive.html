@@ -258,6 +258,12 @@ header.site .sub{color:var(--muted); font-size:13px}
   width:100%; background:var(--bg2); border:1px solid var(--border); color:var(--text);
   border-radius:8px; padding:10px 12px; font-size:14px; cursor:pointer; font-family:inherit;
 }
+.sortrow{display:flex; gap:8px}
+.sortrow select{flex:1}
+.sort-rev{flex:none; width:42px; background:var(--bg2); border:1px solid var(--border);
+  color:var(--text); border-radius:8px; font-size:16px; line-height:1; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; font-family:inherit}
+.sort-rev:hover{border-color:var(--accent)}
 .count{color:var(--muted); font-size:13px; padding-left:2px}
 
 /* ---------- year sections + grid ---------- */
@@ -279,16 +285,16 @@ header.site .sub{color:var(--muted); font-size:13px}
   font-size:14px; font-weight:600; line-height:1.35;
   display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
-.card .cmeta{font-size:12px; color:var(--muted)}
+/* meta line: date, comments, duration — one uniform group, no box */
+.card .cmeta{font-size:10px; color:var(--muted); display:flex; align-items:center;
+  flex-wrap:wrap; gap:3px 4px; line-height:1}
+.card .cmeta .mi{display:inline-flex; align-items:center; gap:4px}
 
-/* title row + chat indicator (grey speech-bubble glyph + level bars, top-right) */
 .cbody{display:flex; align-items:flex-start; gap:8px}
 .cbody .ctitle{flex:1; min-width:0}
-.chatind{flex:none; display:inline-flex; align-items:center; gap:5px; margin-top:2px;
-  padding:5px 7px; border:1px solid var(--border); border-radius:7px}
-.chatglyph{display:block; color:var(--muted)}
+.chatglyph,.clockglyph,.calglyph{display:block; color:var(--muted)}
 .chatglyph .halo{fill:var(--bg); stroke:var(--bg); stroke-width:2}
-.chatnum{font-size:12px; font-weight:600; color:#c8c8c8; line-height:1}
+.badge-sep{color:var(--border)}
 .chatchip{display:inline-flex; align-items:center; gap:6px}
 
 .fine{color:#666; font-size:11px; margin-top:48px; text-align:center; line-height:1.7}
@@ -367,11 +373,14 @@ header.site .sub{color:var(--muted); font-size:13px}
           <input type="search" id="search" placeholder="Search title or description..." />
           <button type="button" class="search-clear" id="search-clear" aria-label="Clear search">&times;</button>
         </div>
-        <select id="sort">
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="chat">Most chatted</option>
-        </select>
+        <div class="sortrow">
+          <select id="sort">
+            <option value="date">Date</option>
+            <option value="chat">Chats</option>
+            <option value="dur">Duration</option>
+          </select>
+          <button type="button" id="sort-rev" class="sort-rev" aria-label="Reverse order" title="Reverse order">↓</button>
+        </div>
         <span class="count" id="count"></span>
       </div>
       <nav class="yearnav" id="yearnav"></nav>
@@ -412,7 +421,9 @@ const downloadUrl = (v)       => 'videos/v' + v.vodid + '.mp4';
 
 const byId = {};   // populated from VIDEOS in init(), once the catalog loads
 
-const state = { current:null, sort:'newest', query:'', expandedYear:null };
+// sortKey: date | chat | dur. sortRev=false => that key's default direction
+// (most recent / most chats / longest); true flips it.
+const state = { current:null, sortKey:'date', sortRev:false, query:'', expandedYear:null };
 
 const shell    = document.getElementById('player-shell');
 // Re-pin the chat to the player's height whenever the player actually resizes
@@ -426,6 +437,7 @@ const countEl  = document.getElementById('count');
 const searchEl = document.getElementById('search');
 const clearEl  = document.getElementById('search-clear');
 const sortEl   = document.getElementById('sort');
+const sortRevEl = document.getElementById('sort-rev');
 const chatEl   = document.getElementById('chat');
 const chatLog  = document.getElementById('chat-log');
 const chatNote = document.getElementById('chat-note');
@@ -468,6 +480,23 @@ try { const qs = localStorage.getItem('macawQuality'); if (qs === 'av1' || qs ==
 // query param and never hits the server. It's only written when "Copy link" is used.
 // Legacy "?v=" and "#<id>" links are still honoured on load for backward compatibility.
 let pendingSeek = null;
+
+// Resume playback where you left off, per VOD, in localStorage (this browser only).
+// A "?t=" deep link always wins over a saved position; positions near the very
+// start (<15s) or end (last 30s) are dropped so we never resume a finished video.
+const RESUME_KEY = 'macawResume';
+function loadResume(){ try { return JSON.parse(localStorage.getItem(RESUME_KEY)) || {}; } catch (e) { return {}; } }
+function saveResumeMap(m){ try { localStorage.setItem(RESUME_KEY, JSON.stringify(m)); } catch (e) {} }
+function getResume(id){ const t = loadResume()[String(id)]; return (typeof t === 'number' && t > 0) ? t : null; }
+function setResume(id, t){
+  const m = loadResume(), key = String(id);
+  const dur = (vjs && isFinite(vjs.duration())) ? vjs.duration() : 0;
+  if (!(t >= 15) || (dur && t > dur - 30)) delete m[key];
+  else m[key] = Math.floor(t);
+  saveResumeMap(m);
+}
+function clearResume(id){ const m = loadResume(); delete m[String(id)]; saveResumeMap(m); }
+
 // directory the app is served from (e.g. "/macaw45/"); frozen at initial page load
 const APP_BASE = location.pathname.replace(/[^/]*$/, '');
 function deepLink(id, t){
@@ -583,7 +612,7 @@ const ICON_MUTE  = '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" f
 const ICON_CHAT  = '<svg class="ic" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/></svg>';
 // <--> : expand the video/chat into the phone's safe-area (notch) margins
 const ICON_EDGE  = '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 8 3 12 7 16"/><polyline points="17 8 21 12 17 16"/><line x1="3" y1="12" x2="21" y2="12"/></svg>';
-const ICON_GEAR  = '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+const ICON_GEAR  = '<svg class="ic" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
 const ICON_BACK15 ='<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8.5A8.5 8.5 0 1 1 3.5 13"/><polyline points="8.5 5.5 4 8.7 2 4.5"/><text x="12" y="16" font-size="8" fill="currentColor" stroke="none" text-anchor="middle" font-weight="700" font-family="Arial,Helvetica,sans-serif">15</text></svg>';
 const ICON_FWD15  = '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 8.5A8.5 8.5 0 1 0 20.5 13"/><polyline points="15.5 5.5 20 8.7 22 4.5"/><text x="12" y="16" font-size="8" fill="currentColor" stroke="none" text-anchor="middle" font-weight="700" font-family="Arial,Helvetica,sans-serif">15</text></svg>';
 
@@ -823,9 +852,22 @@ function renderFeatured(v){
     vjs = videojs(shell.querySelector('video'), { controls: false });
     setupControls(v);
   }
-  if (pendingSeek != null && vjs){
-    const _t = pendingSeek; pendingSeek = null;
+  // Seek target: an explicit "?t=" deep link wins; otherwise resume where we left off.
+  let seekTo = pendingSeek; pendingSeek = null;
+  if (seekTo == null) seekTo = getResume(v.vodid);
+  if (seekTo != null && vjs){
+    const _t = seekTo;
     vjs.ready(() => vjs.one('loadedmetadata', () => { try { vjs.currentTime(_t); } catch (e) {} }));
+  }
+  if (vjs){
+    let lastSave = 0;
+    vjs.on('timeupdate', () => {
+      const now = Date.now();
+      if (now - lastSave < 5000) return;
+      lastSave = now; setResume(v.vodid, vjs.currentTime() || 0);
+    });
+    vjs.on('pause', () => setResume(v.vodid, vjs.currentTime() || 0));
+    vjs.on('ended', () => clearResume(v.vodid));
   }
   setupChat(v);
 
@@ -835,9 +877,13 @@ function renderFeatured(v){
   const bareDate = (v.date || '').slice(0,10);
   const chatChip = (typeof v.chat === 'number' && v.chat > 0)
     ? '<span class="chatchip">' + chatGlyph() + '<span>' + v.chat.toLocaleString() + ' messages</span></span>' : '';
+  const durStr = fmtDuration(v.duration_seconds);
+  const durChip = durStr
+    ? '<span class="chatchip">' + clockGlyph() + '<span>' + durStr + '</span></span>' : '';
   metaEl.innerHTML =
       '<span>' + esc(fmtDate(v.date)) + '</span>'
     + chatChip
+    + durChip
     + '<button type="button" class="btn" id="copy-link">' + COPY_LABEL + '</button>'
     + '<a class="btn" href="' + downloadUrl(v) + '" download="' + esc(bareDate + ' ' + v.title + ' [' + v.vodid + ']') + '">⤓ Download</a>';
   const _cl = document.getElementById('copy-link');
@@ -1061,14 +1107,13 @@ function setupChat(v){
 }
 
 function cardHtml(v){
-  const ind = (typeof v.chat === 'number' && v.chat > 0) ? chatIndicator(v) : '';
   // A real <a href> so the whole card offers a link context menu (copy link) and
   // supports middle-click / ctrl-click to open the VOD in a new tab.
   return '<a class="card" href="' + APP_BASE + v.vodid + '" data-id="' + v.vodid + '" data-ym="' + (v.date||'').slice(0,7) + '">'
     +   '<div class="thumb"><img loading="lazy" alt="" src="' + thumbUrl(v,'720') + '"'
     +     ' onerror="this.style.visibility=\'hidden\'"></div>'
-    +   '<div class="cbody"><div class="ctitle">' + esc(v.title) + '</div>' + ind + '</div>'
-    +   '<div class="cmeta">' + esc(fmtDate(v.date)) + '</div>'
+    +   '<div class="cbody"><div class="ctitle">' + esc(v.title) + '</div></div>'
+    +   '<div class="cmeta">' + cardMeta(v) + '</div>'
     + '</a>';
 }
 
@@ -1080,14 +1125,19 @@ function renderGrid(){
     return terms.every(t => hay.includes(t));
   });
 
-  if (state.sort === 'oldest')      list.sort((a,b) => -byNewest(a,b));
-  else if (state.sort === 'chat')   list.sort((a,b) => (b.chat||0) - (a.chat||0) || byNewest(a,b));
-  else                              list.sort(byNewest);
+  // Each key has a default (descending) comparator; sortRev flips the whole thing.
+  const cmp = {
+    date: (a,b) => byNewest(a,b),
+    chat: (a,b) => (b.chat||0) - (a.chat||0) || byNewest(a,b),
+    dur:  (a,b) => (b.duration_seconds||0) - (a.duration_seconds||0) || byNewest(a,b),
+  }[state.sortKey] || byNewest;
+  const dir = state.sortRev ? -1 : 1;
+  list.sort((a,b) => dir * cmp(a,b));
 
   countEl.textContent = list.length + ' video' + (list.length === 1 ? '' : 's');
 
   // Year sections (and the year nav) only make sense for date-ordered views.
-  const flat = (state.sort === 'chat');
+  const flat = (state.sortKey !== 'date');
 
   if (!list.length){
     gridWrap.innerHTML = '<div class="count">no matches</div>';
@@ -1160,11 +1210,34 @@ function chatGlyph(){
     + '<g transform="translate(0,5)"><path class="halo" d="' + B + '"/><path fill="currentColor" d="' + B + '"/></g>'
     + '</svg>';
 }
-function chatIndicator(v){
-  const c = v.chat || 0;
-  const title = c.toLocaleString() + ' chat messages';
-  return '<span class="chatind" title="' + title + '" aria-label="' + title + '">'
-       + chatGlyph() + '<span class="chatnum">' + fmtCount(c) + '</span></span>';
+function clockGlyph(){
+  return '<svg class="clockglyph" width="12" height="12" viewBox="0 0 24 24" fill="none"'
+    + ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'
+    + ' aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>';
+}
+function calendarGlyph(){
+  return '<svg class="calglyph" width="12" height="12" viewBox="0 0 24 24" fill="none"'
+    + ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'
+    + ' aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/>'
+    + '<path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>';
+}
+function fmtDuration(secs){
+  secs = Math.round(secs || 0);
+  if (secs <= 0) return '';
+  if (secs < 3600) return Math.max(1, Math.round(secs / 60)) + 'min';
+  const h = secs / 3600;
+  const val = (h < 10 ? h.toFixed(1) : Math.round(h).toString()).replace(/\.0$/, '');
+  return val + 'hr' + (val === '1' ? '' : 's');
+}
+// Grid meta: date · comments · duration — one uniform group; each shown only when present.
+function cardMeta(v){
+  const items = ['<span class="mi">' + calendarGlyph() + esc(fmtDate(v.date)) + '</span>'];
+  if (typeof v.chat === 'number' && v.chat > 0)
+    items.push('<span class="mi" title="' + v.chat.toLocaleString() + ' chat messages">'
+      + chatGlyph() + fmtCount(v.chat) + '</span>');
+  const dur = fmtDuration(v.duration_seconds);
+  if (dur) items.push('<span class="mi" title="' + dur + ' long">' + clockGlyph() + dur + '</span>');
+  return items.join('<span class="badge-sep">·</span>');
 }
 
 function renderYearNav(list, flat){
@@ -1241,13 +1314,20 @@ function syncSearch(){
 }
 searchEl.addEventListener('input', syncSearch);
 clearEl.addEventListener('click', () => { searchEl.value = ''; syncSearch(); searchEl.focus(); });
-sortEl.addEventListener('change', () => { state.sort = sortEl.value; renderGrid(); });
+// ↓ = the key's default (descending) order, ↑ = reversed.
+function paintSortRev(){ sortRevEl.textContent = state.sortRev ? '↑' : '↓'; }
+sortEl.addEventListener('change', () => {
+  state.sortKey = sortEl.value; state.sortRev = false; paintSortRev(); renderGrid();
+});
+sortRevEl.addEventListener('click', () => {
+  state.sortRev = !state.sortRev; paintSortRev(); renderGrid();
+});
 
 function goHome(){
   searchEl.value = '';
   state.query = '';
-  state.sort = 'newest';
-  sortEl.value = 'newest';
+  state.sortKey = 'date'; state.sortRev = false;
+  sortEl.value = 'date'; paintSortRev();
   state.expandedYear = null;
   clearEl.parentElement.classList.remove('has-text');
   renderGrid();
@@ -1264,6 +1344,9 @@ function onLocationNav(){
 }
 window.addEventListener('popstate', onLocationNav);
 window.addEventListener('hashchange', onLocationNav);
+window.addEventListener('beforeunload', () => {
+  if (vjs && state.current) setResume(state.current, vjs.currentTime() || 0);
+});
 
 // boot: load the catalog from this origin, then start.
 function init(){
