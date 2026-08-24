@@ -857,14 +857,14 @@ function setupControls(v){
   // native HLS handles the media playlist directly, so it just gets that URL.
   const qRow = q('.cm-quality');
   const qBtns = qRow.querySelectorAll('.cm-q');
-  let variants = null;   // { hls: masterUrl, av1Media, av1Codecs }
+  let variants = null;   // { hls: masterUrl, h264Media, av1Media, av1Codecs }
   const masterUrl = 'playlists/v' + v.vodid + '.m3u8';
   const hasVhs = () => { try { return !!p.tech(true).vhs; } catch (e) { return false; } };
 
   function switchVariant(){
     if (!variants) return;
     const isAv1 = quality === 'av1';
-    let src = variants.hls;
+    let src;
     if (isAv1){
       if (hasVhs()){
         // synthetic single-rendition master so VHS knows the codec up front
@@ -874,6 +874,12 @@ function setupControls(v){
       } else {
         src = variants.av1Media;   // Safari native HLS reads the media playlist itself
       }
+    } else {
+      // Default = H.264. On native HLS (iOS/Safari) hand it the single-codec H.264
+      // media playlist directly, NOT the master — otherwise iOS can ABR-select the
+      // lower-bandwidth AV1 rendition it often can't decode, and just spins forever.
+      // MSE/VHS (desktop) decodes AV1 fine, so it keeps the full master.
+      src = hasVhs() ? variants.hls : (variants.h264Media || variants.hls);
     }
     const t = p.currentTime() || 0, wasPlaying = !p.paused();
     p.src({ src: src, type: 'application/x-mpegURL' });
@@ -897,21 +903,23 @@ function setupControls(v){
     fetch(masterUrl).then((r) => r.ok ? r.text() : '').then((txt) => {
       if (!txt) return;
       const dir = masterUrl.replace(/[^/]*$/, ''), lines = txt.split(/\r?\n/);
-      let av1Media = null, av1Codecs = '', hasH264 = false;
+      const abs = (uri) => new URL(uri, new URL(dir, location.href)).href;
+      let av1Media = null, av1Codecs = '', h264Media = null;
       for (let i = 0; i < lines.length; i++){
         if (!/^#EXT-X-STREAM-INF/i.test(lines[i])) continue;
         const cm = /CODECS="([^"]*)"/i.exec(lines[i]), codecs = cm ? cm[1] : '';
         let j = i + 1; while (j < lines.length && (!lines[j].trim() || lines[j].startsWith('#'))) j++;
         const uri = (lines[j] || '').trim(); if (!uri) continue;
-        if (/av01/i.test(codecs) && !av1Media){
-          av1Media = new URL(uri, new URL(dir, location.href)).href; av1Codecs = codecs;
-        } else if (/(avc1|h264)/i.test(codecs)) hasH264 = true;
+        if (/av01/i.test(codecs) && !av1Media){ av1Media = abs(uri); av1Codecs = codecs; }
+        else if (/(avc1|h264)/i.test(codecs) && !h264Media){ h264Media = abs(uri); }
       }
-      if (!av1Media || !hasH264) return;   // no choice to offer
-      variants = { hls: masterUrl, av1Media: av1Media, av1Codecs: av1Codecs };
+      if (!av1Media || !h264Media) return;   // no choice to offer
+      variants = { hls: masterUrl, h264Media: h264Media, av1Media: av1Media, av1Codecs: av1Codecs };
       const apply = () => {
         qRow.style.display = 'block';
-        if (quality === 'av1') switchVariant();   // honor a persisted AV1 preference
+        // Native HLS: swap master → H.264 media playlist so iOS can't pick AV1.
+        // Also honors a persisted AV1 preference on either engine.
+        if (quality === 'av1' || !hasVhs()) switchVariant();
       };
       if (p.readyState() >= 1) apply(); else p.one('loadedmetadata', apply);
     }).catch(() => {});
