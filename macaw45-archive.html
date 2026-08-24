@@ -238,9 +238,10 @@ header.site .sub{color:var(--muted); font-size:13px}
 /* ---------- toolbar ---------- */
 .controls{display:flex; flex-direction:column; gap:10px}
 .controls input[type=search]{
-  width:100%; background:transparent; border:none; border-bottom:1px solid var(--border);
+  width:100%; background:transparent; border:none; border-bottom:2px solid var(--border);
   color:var(--text); border-radius:0; padding:8px 4px; font-size:16px; outline:none;
 }
+.controls input[type=search]::placeholder{color:#666}
 .controls input[type=search]:focus{border-bottom-color:var(--accent)}
 .searchwrap{position:relative; display:flex}
 .searchwrap input[type=search]{padding-right:36px}
