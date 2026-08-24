@@ -279,17 +279,18 @@ header.site .sub{color:var(--muted); font-size:13px}
 .rail + .year-h{margin-top:40px}
 /* full-width scroller (block, not a flex child) so it never forces the page
    wider on mobile — it just scrolls its row */
-.rail-body{position:relative}
+.rail-body{position:relative; max-width:100%}
 .rail-track{overflow-x:auto; scroll-behavior:smooth; scrollbar-width:none;
   padding:4px 3px; margin:0 -3px}
 .rail-track::-webkit-scrollbar{display:none}
-/* fade the scrolled-away edge(s) into the box background instead of a hard cut */
-.rail-track.fade-l.fade-r{-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 34px,#000 calc(100% - 34px),transparent 100%);
-  mask-image:linear-gradient(90deg,transparent 0,#000 34px,#000 calc(100% - 34px),transparent 100%)}
-.rail-track.fade-l:not(.fade-r){-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 34px,#000 100%);
-  mask-image:linear-gradient(90deg,transparent 0,#000 34px,#000 100%)}
-.rail-track.fade-r:not(.fade-l){-webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 34px),transparent 100%);
-  mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 34px),transparent 100%)}
+/* fade the scrolled-away edge(s) into the box background — overlays so the
+   appearance/disappearance can animate (mask-image can't transition) */
+.rail-body::before, .rail-body::after{content:''; position:absolute; top:0; bottom:0;
+  width:44px; pointer-events:none; z-index:1; opacity:0; transition:opacity .18s ease}
+.rail-body::before{left:0; background:linear-gradient(90deg, var(--bg2), transparent)}
+.rail-body::after{right:0; background:linear-gradient(270deg, var(--bg2), transparent)}
+.rail-body.fade-l::before{opacity:1}
+.rail-body.fade-r::after{opacity:1}
 .rail-row{display:flex; gap:16px}
 .rail-row .card{width:250px; flex:none}
 /* nav buttons overlay the faded edges so the first card lines up with the title */
@@ -345,7 +346,7 @@ header.site .sub{color:var(--muted); font-size:13px}
 
 /* browse: grid + year nav */
 .browse{display:flex; gap:24px; align-items:flex-start}
-.grid-col{flex:1; min-width:0}
+.grid-col{flex:1; min-width:0; width:100%; max-width:100%}
 .side{
   width:240px; flex:none; position:sticky; top:20px;
   max-height:calc(100vh - 40px); overflow:auto;
@@ -1235,6 +1236,7 @@ function recentRailHtml(){
 function wireRailPager(){
   const track = gridWrap.querySelector('.rail-track');
   if (!track) return;
+  const body = track.closest('.rail-body');
   const navs = gridWrap.querySelectorAll('.rail-nav');
   const sync = () => {
     const max = track.scrollWidth - track.clientWidth - 1;
@@ -1244,8 +1246,8 @@ function wireRailPager(){
       const dir = parseInt(b.getAttribute('data-dir'), 10);
       b.classList.toggle('hide', dir < 0 ? atStart : atEnd);
     });
-    track.classList.toggle('fade-l', !atStart);
-    track.classList.toggle('fade-r', !atEnd && max > 0);
+    body.classList.toggle('fade-l', !atStart);
+    body.classList.toggle('fade-r', !atEnd && max > 0);
   };
   navs.forEach((b) => b.addEventListener('click', () => {
     const dir = parseInt(b.getAttribute('data-dir'), 10);
