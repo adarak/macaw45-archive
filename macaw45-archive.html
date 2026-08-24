@@ -232,8 +232,7 @@ header.site .sub{color:var(--muted); font-size:13px}
 .btn svg{display:block}
 .btn.copied{color:#7fe0a3; border-color:#2f6b45}
 .feat-desc{
-  background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
-  padding:14px 16px; color:#ddd; font-size:14px; line-height:1.55; white-space:pre-wrap;
+  color:#ddd; font-size:14px; line-height:1.55; white-space:pre-wrap;
 }
 
 /* ---------- toolbar ---------- */
@@ -927,7 +926,8 @@ function renderFeatured(v){
   setupChat(v);
 
   titleEl.textContent = v.title;
-  descEl.textContent  = v.description || '(no description)';
+  descEl.textContent  = v.description || '';
+  descEl.style.display = v.description ? '' : 'none';
 
   const bareDate = (v.date || '').slice(0,10);
   const chatChip = (typeof v.chat === 'number' && v.chat > 0)
