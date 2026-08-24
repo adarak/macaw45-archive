@@ -266,6 +266,17 @@ header.site .sub{color:var(--muted); font-size:13px}
 .sort-rev:hover{border-color:var(--accent)}
 .count{color:var(--muted); font-size:13px; padding-left:2px}
 
+/* ---------- continue-watching rail ---------- */
+.rail{margin:8px 0 10px}
+.rail-head{display:flex; align-items:baseline; gap:12px; margin:0 0 12px}
+.rail-head > span{font-size:20px; font-weight:800; color:var(--text)}
+.rail-clear{background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer;
+  font-family:inherit; padding:2px 4px}
+.rail-clear:hover{color:var(--text); text-decoration:underline}
+.rail + .year-h{margin-top:20px}
+.cprog{position:absolute; left:0; right:0; bottom:0; height:4px; background:rgba(0,0,0,.55)}
+.cprog span{display:block; height:100%; background:var(--accent)}
+
 /* ---------- year sections + grid ---------- */
 .year-h{
   font-size:30px; font-weight:800; color:var(--text); letter-spacing:.2px;
@@ -484,18 +495,35 @@ let pendingSeek = null;
 // Resume playback where you left off, per VOD, in localStorage (this browser only).
 // A "?t=" deep link always wins over a saved position; positions near the very
 // start (<15s) or end (last 30s) are dropped so we never resume a finished video.
+// Stored per VOD as { t: seconds, at: last-watched ms }. Legacy plain-number
+// values are still read (treated as t with no timestamp).
 const RESUME_KEY = 'macawResume';
 function loadResume(){ try { return JSON.parse(localStorage.getItem(RESUME_KEY)) || {}; } catch (e) { return {}; } }
 function saveResumeMap(m){ try { localStorage.setItem(RESUME_KEY, JSON.stringify(m)); } catch (e) {} }
-function getResume(id){ const t = loadResume()[String(id)]; return (typeof t === 'number' && t > 0) ? t : null; }
+function resumeEntry(id){
+  const e = loadResume()[String(id)];
+  if (typeof e === 'number') return { t: e, at: 0 };
+  return (e && typeof e.t === 'number') ? e : null;
+}
+function getResume(id){ const e = resumeEntry(id); return (e && e.t > 0) ? e.t : null; }
 function setResume(id, t){
   const m = loadResume(), key = String(id);
   const dur = (vjs && isFinite(vjs.duration())) ? vjs.duration() : 0;
   if (!(t >= 15) || (dur && t > dur - 30)) delete m[key];
-  else m[key] = Math.floor(t);
+  else m[key] = { t: Math.floor(t), at: Date.now(), dur: dur ? Math.floor(dur) : (m[key] && m[key].dur) || 0 };
   saveResumeMap(m);
 }
 function clearResume(id){ const m = loadResume(); delete m[String(id)]; saveResumeMap(m); }
+// Most-recently-watched VODs (that still exist in the catalog), newest first.
+function recentWatched(limit){
+  const m = loadResume();
+  return Object.keys(m)
+    .map((id) => { const e = m[id]; const o = (typeof e === 'number') ? { t: e, at: 0 } : e;
+      return { v: byId[id], t: o && o.t, at: (o && o.at) || 0, dur: (o && o.dur) || 0 }; })
+    .filter((r) => r.v && r.t > 0)
+    .sort((a, b) => b.at - a.at)
+    .slice(0, limit || 8);
+}
 
 // directory the app is served from (e.g. "/macaw45/"); frozen at initial page load
 const APP_BASE = location.pathname.replace(/[^/]*$/, '');
@@ -1106,15 +1134,35 @@ function setupChat(v){
   if (video) video.addEventListener('timeupdate', tick);
 }
 
-function cardHtml(v){
+function cardHtml(v, opts){
+  opts = opts || {};
+  // optional resume progress bar (0..1) along the bottom of the thumbnail
+  let bar = '';
+  if (opts.progress > 0){
+    const pct = Math.max(2, Math.min(100, opts.progress * 100));
+    bar = '<div class="cprog"><span style="width:' + pct.toFixed(1) + '%"></span></div>';
+  }
   // A real <a href> so the whole card offers a link context menu (copy link) and
   // supports middle-click / ctrl-click to open the VOD in a new tab.
   return '<a class="card" href="' + APP_BASE + v.vodid + '" data-id="' + v.vodid + '" data-ym="' + (v.date||'').slice(0,7) + '">'
     +   '<div class="thumb"><img loading="lazy" alt="" src="' + thumbUrl(v,'720') + '"'
-    +     ' onerror="this.style.visibility=\'hidden\'"></div>'
+    +     ' onerror="this.style.visibility=\'hidden\'">' + bar + '</div>'
     +   '<div class="cbody"><div class="ctitle">' + esc(v.title) + '</div></div>'
     +   '<div class="cmeta">' + cardMeta(v) + '</div>'
     + '</a>';
+}
+// "Continue watching" rail — the most-recent resume positions, above the grid.
+function recentRailHtml(){
+  const rec = recentWatched(8);
+  if (!rec.length) return '';
+  const cards = rec.map((r) => {
+    const dur = r.dur || r.v.duration_seconds || 0;
+    return cardHtml(r.v, { progress: dur ? r.t / dur : 0 });
+  }).join('');
+  return '<section class="rail">'
+    + '<div class="rail-head"><span>Continue watching</span>'
+    +   '<button type="button" class="rail-clear" id="rail-clear">Clear</button></div>'
+    + '<div class="grid">' + cards + '</div></section>';
 }
 
 function renderGrid(){
@@ -1138,6 +1186,8 @@ function renderGrid(){
 
   // Year sections (and the year nav) only make sense for date-ordered views.
   const flat = (state.sortKey !== 'date');
+  // "Continue watching" rail only on the unfiltered browse view.
+  const rail = terms.length ? '' : recentRailHtml();
 
   if (!list.length){
     gridWrap.innerHTML = '<div class="count">no matches</div>';
@@ -1146,7 +1196,7 @@ function renderGrid(){
   }
 
   if (flat){
-    gridWrap.innerHTML = '<div class="grid">' + list.map(cardHtml).join('') + '</div>';
+    gridWrap.innerHTML = rail + '<div class="grid">' + list.map((v) => cardHtml(v)).join('') + '</div>';
   } else {
     const groups = [];
     let cur = null;
@@ -1155,7 +1205,7 @@ function renderGrid(){
       if (!cur || cur.year !== y){ cur = { year:y, items:[] }; groups.push(cur); }
       cur.items.push(v);
     }
-    gridWrap.innerHTML = groups.map(g => {
+    gridWrap.innerHTML = rail + groups.map(g => {
       // sub-group each year into months, preserving order
       const months = [];
       let cm = null;
@@ -1181,6 +1231,11 @@ function renderGrid(){
       e.preventDefault();
       selectVideo(el.getAttribute('data-id'));
     });
+  });
+  const railClear = document.getElementById('rail-clear');
+  if (railClear) railClear.addEventListener('click', () => {
+    try { localStorage.removeItem(RESUME_KEY); } catch (e) {}
+    renderGrid();
   });
   markActive();
   renderYearNav(list, flat);
