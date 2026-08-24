@@ -277,6 +277,16 @@ header.site .sub{color:var(--muted); font-size:13px}
   font-family:inherit; padding:2px 4px}
 .rail-clear:hover{color:var(--text); text-decoration:underline}
 .rail + .year-h{margin-top:40px}
+.rail-body{display:flex; align-items:center; gap:8px}
+.rail-track{flex:1; min-width:0; overflow-x:auto; scroll-behavior:smooth; scrollbar-width:none}
+.rail-track::-webkit-scrollbar{display:none}
+.rail-row{display:flex; gap:16px}
+.rail-row .card{width:260px; flex:none}
+.rail-nav{flex:none; width:34px; height:34px; border-radius:50%; background:var(--bg);
+  border:1px solid var(--border); color:var(--text); font-size:22px; line-height:1; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; font-family:inherit}
+.rail-nav:hover{border-color:var(--ctrl-accent)}
+.rail-nav:disabled{opacity:.3; cursor:default; border-color:var(--border)}
 .cprog{position:absolute; left:0; right:0; bottom:0; height:4px; background:rgba(0,0,0,.55)}
 .cprog span{display:block; height:100%; background:var(--ctrl-accent)}
 .card-x{position:absolute; top:7px; right:7px; width:32px; height:32px; border:none;
@@ -1196,7 +1206,32 @@ function recentRailHtml(){
   return '<section class="rail">'
     + '<div class="rail-head"><span>Continue watching</span>'
     +   '<button type="button" class="rail-clear" id="rail-clear">Clear</button></div>'
-    + '<div class="grid">' + cards + '</div></section>';
+    + '<div class="rail-body">'
+    +   '<button type="button" class="rail-nav" data-dir="-1" aria-label="Scroll left">&lsaquo;</button>'
+    +   '<div class="rail-track"><div class="rail-row">' + cards + '</div></div>'
+    +   '<button type="button" class="rail-nav" data-dir="1" aria-label="Scroll right">&rsaquo;</button>'
+    + '</div></section>';
+}
+
+// Single-row continue-watching pager: buttons scroll the track ~one page and
+// disable at each end.
+function wireRailPager(){
+  const track = gridWrap.querySelector('.rail-track');
+  if (!track) return;
+  const navs = gridWrap.querySelectorAll('.rail-nav');
+  const sync = () => {
+    const max = track.scrollWidth - track.clientWidth - 1;
+    navs.forEach((b) => {
+      const dir = parseInt(b.getAttribute('data-dir'), 10);
+      b.disabled = dir < 0 ? track.scrollLeft <= 0 : track.scrollLeft >= max;
+    });
+  };
+  navs.forEach((b) => b.addEventListener('click', () => {
+    const dir = parseInt(b.getAttribute('data-dir'), 10);
+    track.scrollBy({ left: dir * Math.max(track.clientWidth * 0.85, 200) });
+  }));
+  track.addEventListener('scroll', sync, { passive: true });
+  sync();
 }
 
 function renderGrid(){
@@ -1275,6 +1310,7 @@ function renderGrid(){
     try { localStorage.removeItem(RESUME_KEY); } catch (e) {}
     renderGrid();
   });
+  wireRailPager();
   gridWrap.querySelectorAll('.card-x').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();   // don't open the card
