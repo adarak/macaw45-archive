@@ -1261,7 +1261,12 @@ function renderGrid(){
     btn.addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();   // don't open the card
       clearResume(btn.getAttribute('data-rm'));
-      renderGrid();
+      // Remove just this rail card from the DOM — a full re-render would re-read
+      // storage and could momentarily drop the actively-playing video (its live
+      // position is only persisted every ~5s), making other cards vanish too.
+      const card = btn.closest('.card'), rail = btn.closest('.rail');
+      if (card) card.remove();
+      if (rail && !rail.querySelector('.card')) rail.remove();
     });
   });
   markActive();
