@@ -267,14 +267,14 @@ header.site .sub{color:var(--muted); font-size:13px}
 .count{color:var(--muted); font-size:13px; padding-left:2px}
 
 /* ---------- continue-watching rail ---------- */
-.rail{margin:8px 0 10px}
+.rail{margin:8px 0 34px; background:var(--bg2); border:1px solid var(--border);
+  border-radius:var(--radius); padding:16px 18px}
 .rail-head{display:flex; align-items:baseline; gap:12px; margin:0 0 12px}
 .rail-head > span{font-size:30px; font-weight:800; letter-spacing:.2px; color:var(--text)}
 .rail-clear{background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer;
   font-family:inherit; padding:2px 4px}
 .rail-clear:hover{color:var(--text); text-decoration:underline}
-.rail{margin-bottom:34px}
-.rail + .year-h{margin-top:52px}
+.rail + .year-h{margin-top:40px}
 .cprog{position:absolute; left:0; right:0; bottom:0; height:4px; background:rgba(0,0,0,.55)}
 .cprog span{display:block; height:100%; background:var(--ctrl-accent)}
 .card-x{position:absolute; top:7px; right:7px; width:32px; height:32px; border:none;
@@ -524,12 +524,22 @@ function clearResume(id){ const m = loadResume(); delete m[String(id)]; saveResu
 // Most-recently-watched VODs (that still exist in the catalog), newest first.
 function recentWatched(limit){
   const m = loadResume();
-  return Object.keys(m)
+  const rows = Object.keys(m)
     .map((id) => { const e = m[id]; const o = (typeof e === 'number') ? { t: e, at: 0 } : e;
       return { v: byId[id], t: o && o.t, at: (o && o.at) || 0, dur: (o && o.dur) || 0 }; })
-    .filter((r) => r.v && r.t > 0)
-    .sort((a, b) => b.at - a.at)
-    .slice(0, limit || 8);
+    .filter((r) => r.v && r.t > 0);
+  // Always surface the currently-playing video, even if its stored entry is
+  // momentarily gone: the resume-seek transient can report a sub-15s time and
+  // setResume deletes it, so a re-render would otherwise drop it until the next save.
+  if (activeVideo && byId[String(activeVideo.vodid)]){
+    const aid = String(activeVideo.vodid);
+    if (!rows.some((r) => String(r.v.vodid) === aid)){
+      const t = (vjs && isFinite(vjs.currentTime())) ? vjs.currentTime() : 0;
+      const dur = (vjs && isFinite(vjs.duration())) ? vjs.duration() : (activeVideo.duration_seconds || 0);
+      rows.push({ v: byId[aid], t: Math.max(t, 0.001), at: Date.now(), dur: dur });
+    }
+  }
+  return rows.sort((a, b) => b.at - a.at).slice(0, limit || 8);
 }
 
 // directory the app is served from (e.g. "/macaw45/"); frozen at initial page load
@@ -1216,7 +1226,11 @@ function renderGrid(){
   }
 
   if (flat){
-    gridWrap.innerHTML = rail + '<div class="grid">' + list.map((v) => cardHtml(v)).join('') + '</div>';
+    const name = state.sortKey === 'chat' ? 'chat count' : 'duration';
+    const ord = state.sortRev ? '↑ ascending' : '↓ descending';
+    const hdr = '<div class="year-h">Sorted by ' + name
+      + ' <span class="yh-count">' + ord + '</span></div>';
+    gridWrap.innerHTML = rail + hdr + '<div class="grid">' + list.map((v) => cardHtml(v)).join('') + '</div>';
   } else {
     const groups = [];
     let cur = null;
