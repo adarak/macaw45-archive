@@ -306,8 +306,9 @@ header.site .sub{color:var(--muted); font-size:13px}
 .cprog{position:absolute; left:0; right:0; bottom:0; height:4px; background:rgba(0,0,0,.55)}
 .cprog span{display:block; height:100%; background:var(--ctrl-accent)}
 .card-x{position:absolute; top:7px; right:7px; width:32px; height:32px; border:none;
-  border-radius:50%; background:rgba(0,0,0,.62); color:#fff; font-size:20px; line-height:1;
+  border-radius:50%; background:rgba(0,0,0,.62); color:#fff; line-height:1; padding:0;
   cursor:pointer; display:flex; align-items:center; justify-content:center}
+.card-x svg{width:15px; height:15px; display:block}
 .card-x:hover{background:rgba(0,0,0,.85)}
 
 /* ---------- year sections + grid ---------- */
@@ -1200,7 +1201,7 @@ function cardHtml(v, opts){
     bar = '<div class="cprog"><span style="width:' + pct.toFixed(1) + '%"></span></div>';
   }
   const rm = opts.removable
-    ? '<button type="button" class="card-x" data-rm="' + v.vodid + '" aria-label="Remove from continue watching" title="Remove">&times;</button>'
+    ? '<button type="button" class="card-x" data-rm="' + v.vodid + '" aria-label="Remove from continue watching" title="Remove"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>'
     : '';
   // A real <a href> so the whole card offers a link context menu (copy link) and
   // supports middle-click / ctrl-click to open the VOD in a new tab.
