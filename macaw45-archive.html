@@ -481,6 +481,8 @@ function fmtDate(s){
 function byNewest(a,b){ return a.date > b.date ? -1 : a.date < b.date ? 1 : 0; }
 
 let vjs = null;
+let activeVideo = null;        // the VOD currently loaded in the player
+let suppressResumeSave = false; // ignore the spurious pause fired during dispose
 let playRate = 1;   // chosen playback speed, kept across video switches this session
 let menuDocHandler = null;   // outside-click closer for the settings popover (rebound per video)
 // Quality pick: 'hls' = the H.264 rendition (~6 Mbps, the default we've used); 'av1' =
@@ -879,7 +881,16 @@ function setupControls(v){
 
 function renderFeatured(v){
   document.title = v.title + ' | macaw45 archive';
-  if (vjs){ try { vjs.dispose(); } catch (e) {} vjs = null; }
+  if (vjs){
+    // Save the OUTGOING video's real position first, then suppress the pause that
+    // dispose() fires (currentTime ~0) so it can't wipe the entry we just wrote.
+    try { if (activeVideo) setResume(activeVideo.vodid, vjs.currentTime() || 0); } catch (e) {}
+    suppressResumeSave = true;
+    try { vjs.dispose(); } catch (e) {}
+    suppressResumeSave = false;
+    vjs = null;
+  }
+  activeVideo = v;
   shell.innerHTML = videoSourceHtml(v);
   if (window.videojs){
     vjs = videojs(shell.querySelector('video'), { controls: false });
@@ -895,12 +906,13 @@ function renderFeatured(v){
   if (vjs){
     let lastSave = 0;
     vjs.on('timeupdate', () => {
+      if (suppressResumeSave) return;
       const now = Date.now();
       if (now - lastSave < 5000) return;
       lastSave = now; setResume(v.vodid, vjs.currentTime() || 0);
     });
-    vjs.on('pause', () => setResume(v.vodid, vjs.currentTime() || 0));
-    vjs.on('ended', () => clearResume(v.vodid));
+    vjs.on('pause', () => { if (!suppressResumeSave) setResume(v.vodid, vjs.currentTime() || 0); });
+    vjs.on('ended', () => { if (!suppressResumeSave) clearResume(v.vodid); });
   }
   setupChat(v);
 
