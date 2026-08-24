@@ -275,7 +275,13 @@ header.site .sub{color:var(--muted); font-size:13px}
 .rail-clear:hover{color:var(--text); text-decoration:underline}
 .rail + .year-h{margin-top:20px}
 .cprog{position:absolute; left:0; right:0; bottom:0; height:4px; background:rgba(0,0,0,.55)}
-.cprog span{display:block; height:100%; background:var(--accent)}
+.cprog span{display:block; height:100%; background:var(--ctrl-accent)}
+.card-x{position:absolute; top:6px; right:6px; width:24px; height:24px; border:none;
+  border-radius:50%; background:rgba(0,0,0,.62); color:#fff; font-size:15px; line-height:1;
+  cursor:pointer; display:flex; align-items:center; justify-content:center; opacity:0;
+  transition:opacity .12s}
+.card:hover .card-x, .card-x:focus{opacity:1}
+.card-x:hover{background:rgba(0,0,0,.85)}
 
 /* ---------- year sections + grid ---------- */
 .year-h{
@@ -291,7 +297,7 @@ header.site .sub{color:var(--muted); font-size:13px}
 }
 .card .thumb img{width:100%; height:100%; object-fit:cover; display:block; transition:transform .25s}
 .card:hover .thumb img{transform:scale(1.045)}
-.card.active .thumb{outline:2px solid var(--accent); outline-offset:0}
+.card.active .thumb{outline:2px solid var(--ctrl-accent); outline-offset:0}
 .card .ctitle{
   font-size:14px; font-weight:600; line-height:1.35;
   display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
@@ -1142,11 +1148,14 @@ function cardHtml(v, opts){
     const pct = Math.max(2, Math.min(100, opts.progress * 100));
     bar = '<div class="cprog"><span style="width:' + pct.toFixed(1) + '%"></span></div>';
   }
+  const rm = opts.removable
+    ? '<button type="button" class="card-x" data-rm="' + v.vodid + '" aria-label="Remove from continue watching" title="Remove">&times;</button>'
+    : '';
   // A real <a href> so the whole card offers a link context menu (copy link) and
   // supports middle-click / ctrl-click to open the VOD in a new tab.
   return '<a class="card" href="' + APP_BASE + v.vodid + '" data-id="' + v.vodid + '" data-ym="' + (v.date||'').slice(0,7) + '">'
     +   '<div class="thumb"><img loading="lazy" alt="" src="' + thumbUrl(v,'720') + '"'
-    +     ' onerror="this.style.visibility=\'hidden\'">' + bar + '</div>'
+    +     ' onerror="this.style.visibility=\'hidden\'">' + bar + rm + '</div>'
     +   '<div class="cbody"><div class="ctitle">' + esc(v.title) + '</div></div>'
     +   '<div class="cmeta">' + cardMeta(v) + '</div>'
     + '</a>';
@@ -1157,7 +1166,7 @@ function recentRailHtml(){
   if (!rec.length) return '';
   const cards = rec.map((r) => {
     const dur = r.dur || r.v.duration_seconds || 0;
-    return cardHtml(r.v, { progress: dur ? r.t / dur : 0 });
+    return cardHtml(r.v, { progress: dur ? r.t / dur : 0, removable: true });
   }).join('');
   return '<section class="rail">'
     + '<div class="rail-head"><span>Continue watching</span>'
@@ -1236,6 +1245,13 @@ function renderGrid(){
   if (railClear) railClear.addEventListener('click', () => {
     try { localStorage.removeItem(RESUME_KEY); } catch (e) {}
     renderGrid();
+  });
+  gridWrap.querySelectorAll('.card-x').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();   // don't open the card
+      clearResume(btn.getAttribute('data-rm'));
+      renderGrid();
+    });
   });
   markActive();
   renderYearNav(list, flat);
