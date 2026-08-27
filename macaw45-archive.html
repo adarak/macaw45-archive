@@ -562,15 +562,16 @@ function recentWatched(limit){
     .map((id) => { const e = m[id]; const o = (typeof e === 'number') ? { t: e, at: 0 } : e;
       return { v: byId[id], t: o && o.t, at: (o && o.at) || 0, dur: (o && o.dur) || 0 }; })
     .filter((r) => r.v && r.t > 0);
-  // Always surface the currently-playing video, even if its stored entry is
-  // momentarily gone: the resume-seek transient can report a sub-15s time and
-  // setResume deletes it, so a re-render would otherwise drop it until the next save.
+  // Surface the currently-playing video even if its stored entry is momentarily
+  // gone (the resume-seek transient can delete it), BUT only once it's genuinely
+  // being watched (past the threshold). Without this gate the home page's
+  // auto-loaded video would keep reappearing and survive removal/Clear.
   if (activeVideo && byId[String(activeVideo.vodid)]){
     const aid = String(activeVideo.vodid);
-    if (!rows.some((r) => String(r.v.vodid) === aid)){
-      const t = (vjs && isFinite(vjs.currentTime())) ? vjs.currentTime() : 0;
+    const t = (vjs && isFinite(vjs.currentTime())) ? vjs.currentTime() : 0;
+    if (t >= RESUME_MIN && !rows.some((r) => String(r.v.vodid) === aid)){
       const dur = (vjs && isFinite(vjs.duration())) ? vjs.duration() : (activeVideo.duration_seconds || 0);
-      rows.push({ v: byId[aid], t: Math.max(t, 0.001), at: Date.now(), dur: dur });
+      rows.push({ v: byId[aid], t: t, at: Date.now(), dur: dur });
     }
   }
   return rows.sort((a, b) => b.at - a.at).slice(0, limit || 8);
