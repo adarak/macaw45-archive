@@ -544,10 +544,13 @@ function resumeEntry(id){
   return (e && typeof e.t === 'number') ? e : null;
 }
 function getResume(id){ const e = resumeEntry(id); return (e && e.t > 0) ? e.t : null; }
+// Only track once the viewer is genuinely watching (>2 min in) — this keeps the
+// home page's auto-loaded most-recent video out of Continue Watching.
+const RESUME_MIN = 120;
 function setResume(id, t){
   const m = loadResume(), key = String(id);
   const dur = (vjs && isFinite(vjs.duration())) ? vjs.duration() : 0;
-  if (!(t >= 15) || (dur && t > dur - 30)) delete m[key];
+  if (!(t >= RESUME_MIN) || (dur && t > dur - 30)) delete m[key];
   else m[key] = { t: Math.floor(t), at: Date.now(), dur: dur ? Math.floor(dur) : (m[key] && m[key].dur) || 0 };
   saveResumeMap(m);
 }
