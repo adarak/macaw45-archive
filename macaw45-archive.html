@@ -495,7 +495,17 @@ const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
-const yearOf = (s) => (s || '').slice(0,4) || '????';
+// Group by the viewer's LOCAL calendar month (matching fmtDate), not the UTC
+// prefix of the timestamp — a late-evening stream can be next month in UTC.
+function localYm(s){
+  s = s || '';
+  if (/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(s)){
+    const d = new Date(s);
+    if (!isNaN(d)) return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+  return s.slice(0,7);
+}
+const yearOf = (s) => localYm(s).slice(0,4) || '????';
 
 function fmtDate(s){
   try {
@@ -1210,7 +1220,7 @@ function cardHtml(v, opts){
     : '';
   // A real <a href> so the whole card offers a link context menu (copy link) and
   // supports middle-click / ctrl-click to open the VOD in a new tab.
-  return '<a class="card" href="' + APP_BASE + v.vodid + '" data-id="' + v.vodid + '" data-ym="' + (v.date||'').slice(0,7) + '">'
+  return '<a class="card" href="' + APP_BASE + v.vodid + '" data-id="' + v.vodid + '" data-ym="' + localYm(v.date) + '">'
     +   '<div class="thumb"><img loading="lazy" alt="" src="' + thumbUrl(v,'720') + '"'
     +     ' onerror="this.style.visibility=\'hidden\'">' + bar + rm + '</div>'
     +   '<div class="cbody"><div class="ctitle">' + esc(v.title) + '</div></div>'
@@ -1312,7 +1322,7 @@ function renderGrid(){
       const months = [];
       let cm = null;
       for (const v of g.items){
-        const ym = (v.date||'').slice(0,7);
+        const ym = localYm(v.date);
         if (!cm || cm.ym !== ym){ cm = { ym, items:[] }; months.push(cm); }
         cm.items.push(v);
       }
@@ -1418,7 +1428,7 @@ function renderYearNav(list, flat){
   // group by year -> months, preserving the list's (already sorted) order
   const years = new Map();
   for (const v of list){
-    const y = yearOf(v.date), ym = (v.date||'').slice(0,7);
+    const y = yearOf(v.date), ym = localYm(v.date);
     if (!years.has(y)) years.set(y, { count:0, months:new Map() });
     const yr = years.get(y);
     yr.count++;
