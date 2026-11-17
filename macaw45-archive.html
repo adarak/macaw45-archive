@@ -539,6 +539,7 @@ try { const qs = localStorage.getItem('macawQuality'); if (qs === 'av1' || qs ==
 // query param and never hits the server. It's only written when "Copy link" is used.
 // Legacy "?v=" and "#<id>" links are still honoured on load for backward compatibility.
 let pendingSeek = null;
+let resumeWant = null;   // resume target still being applied (see renderFeatured); a user seek cancels it
 
 // Resume playback where you left off, per VOD, in localStorage (this browser only).
 // A "?t=" deep link always wins over a saved position; positions near the very
@@ -734,13 +735,28 @@ function showControls(){
 }
 // Mouse movement reveals the controls. Touch doesn't: a tap fires pointermove
 // before click, which used to un-hide the bar so the click then paused instead.
-let lastPtr = 'mouse';
-shell.addEventListener('pointerdown', (e) => { lastPtr = e.pointerType || 'mouse'; }, true);
+// Touch taps are detected from pointer events directly — iOS doesn't reliably
+// synthesize a click on the video surface. A tap on hidden controls just shows
+// them; a tap while they're visible plays/pauses.
+let tapStart = null, touchTapAt = 0;
+const inCtrl = (e) => !!(e.target.closest && e.target.closest('.ctrl'));
+shell.addEventListener('pointerdown', (e) => {
+  tapStart = (e.pointerType !== 'mouse' && !inCtrl(e)) ? { x: e.clientX, y: e.clientY, t: Date.now() } : null;
+}, true);
+shell.addEventListener('pointerup', (e) => {
+  const st = tapStart; tapStart = null;
+  if (!st || !vjs || inCtrl(e)) return;
+  if (Math.hypot(e.clientX - st.x, e.clientY - st.y) > 12 || Date.now() - st.t > 600) return;   // a drag/scroll, not a tap
+  touchTapAt = Date.now();
+  if (curBar && curBar.classList.contains('hide')){ showControls(); return; }
+  vjs.paused() ? vjs.play() : vjs.pause();
+  showControls();
+}, true);
+shell.addEventListener('pointercancel', () => { tapStart = null; }, true);
 shell.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') showControls(); });
 shell.addEventListener('click', (e) => {
-  if (!vjs || (e.target.closest && e.target.closest('.ctrl'))) return;
-  // Touch: a tap on hidden controls just brings them back; tap again to play/pause.
-  if (lastPtr !== 'mouse' && curBar && curBar.classList.contains('hide')){ showControls(); return; }
+  if (!vjs || inCtrl(e)) return;
+  if (Date.now() - touchTapAt < 700) return;   // already handled as a touch tap
   vjs.paused() ? vjs.play() : vjs.pause();
   showControls();
 });
@@ -751,8 +767,8 @@ document.addEventListener('keydown', (e) => {
   if (k === ' ' || k === 'k'){ e.preventDefault(); vjs.paused() ? vjs.play() : vjs.pause(); }
   else if (k === 'm'){ vjs.muted(!vjs.muted()); }
   else if (k === 'Escape'){ if (document.fullscreenElement || document.webkitFullscreenElement) toggleStageFullscreen(); }
-  else if (k === 'ArrowLeft'){ vjs.currentTime(Math.max(0, vjs.currentTime() - 15)); }
-  else if (k === 'ArrowRight'){ vjs.currentTime(vjs.currentTime() + 15); }
+  else if (k === 'ArrowLeft'){ resumeWant = null; vjs.currentTime(Math.max(0, vjs.currentTime() - 15)); }
+  else if (k === 'ArrowRight'){ resumeWant = null; vjs.currentTime(vjs.currentTime() + 15); }
 });
 
 function setupControls(v){
@@ -801,8 +817,8 @@ function setupControls(v){
     return v.duration_seconds || 0;
   };
   playBtn.addEventListener('click', () => p.paused() ? p.play() : p.pause());
-  q('[data-a=back]').addEventListener('click', () => { p.currentTime(Math.max(0, p.currentTime() - 15)); showControls(); });
-  q('[data-a=fwd]').addEventListener('click', () => { p.currentTime(Math.min(dur() || Infinity, p.currentTime() + 15)); showControls(); });
+  q('[data-a=back]').addEventListener('click', () => { resumeWant = null; p.currentTime(Math.max(0, p.currentTime() - 15)); showControls(); });
+  q('[data-a=fwd]').addEventListener('click', () => { resumeWant = null; p.currentTime(Math.min(dur() || Infinity, p.currentTime() + 15)); showControls(); });
   const header = document.querySelector('header.site');
   let mobileChatAuto = false;   // auto-open chat once on the first mobile play
   p.on('play', () => {
@@ -849,7 +865,7 @@ function setupControls(v){
   const seekTo = (x) => {
     const r = scrub.getBoundingClientRect();
     const f = Math.min(1, Math.max(0, (x - r.left) / r.width));
-    const d = dur(); if (d) p.currentTime(f * d);
+    const d = dur(); if (d){ resumeWant = null; p.currentTime(f * d); }
   };
   scrub.addEventListener('pointerdown', (e) => { dragging = true; bar.classList.add('scrubbing'); try { scrub.setPointerCapture(e.pointerId); } catch (_) {} seekTo(e.clientX); paint(); });
   scrub.addEventListener('pointermove', (e) => { if (dragging){ seekTo(e.clientX); paint(); } });
@@ -985,19 +1001,37 @@ function renderFeatured(v){
   // Seek target: an explicit "?t=" deep link wins; otherwise resume where we left off.
   let seekTo = pendingSeek; pendingSeek = null;
   if (seekTo == null) seekTo = getResume(v.vodid);
+  // iOS native HLS can silently ignore a seek made at loadedmetadata (notably for
+  // the video auto-loaded on page load, before any user gesture) and then play
+  // from 0. So keep re-applying the target until playback is actually near it,
+  // and don't record positions meanwhile — a save at ~0s would wipe the entry.
+  resumeWant = null;
   if (seekTo != null && vjs){
-    const _t = seekTo;
-    vjs.ready(() => vjs.one('loadedmetadata', () => { try { vjs.currentTime(_t); } catch (e) {} }));
+    resumeWant = seekTo;
+    const p = vjs, started = Date.now();
+    const settle = () => {
+      if (resumeWant == null) return;
+      const ct = p.currentTime() || 0;
+      if (Math.abs(ct - resumeWant) < 3){ resumeWant = null; return; }
+      if (Date.now() - started > 120000 && !p.paused() && ct > 30){ resumeWant = null; return; }   // give up
+      try { p.currentTime(resumeWant); } catch (e) {}
+    };
+    vjs.ready(() => {
+      p.one('loadedmetadata', settle);
+      p.on('canplay', settle);
+      p.on('playing', settle);
+      p.on('timeupdate', () => { if (resumeWant != null && !p.seeking()) settle(); });
+    });
   }
   if (vjs){
     let lastSave = 0;
     vjs.on('timeupdate', () => {
-      if (suppressResumeSave) return;
+      if (suppressResumeSave || resumeWant != null) return;
       const now = Date.now();
       if (now - lastSave < 5000) return;
       lastSave = now; setResume(v.vodid, vjs.currentTime() || 0);
     });
-    vjs.on('pause', () => { if (!suppressResumeSave) setResume(v.vodid, vjs.currentTime() || 0); });
+    vjs.on('pause', () => { if (!suppressResumeSave && resumeWant == null) setResume(v.vodid, vjs.currentTime() || 0); });
     vjs.on('ended', () => { if (!suppressResumeSave) clearResume(v.vodid); });
   }
   setupChat(v);
