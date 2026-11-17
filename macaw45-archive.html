@@ -60,7 +60,8 @@ header.site .sub{color:var(--muted); font-size:13px}
 
 /* live-style chat column beside the player (demo build) */
 .chat{
-  flex:none; width:340px; display:flex; flex-direction:column; position:relative;
+  /* scales on narrower side-by-side screens (e.g. a foldable unfolded, ~950pt wide) */
+  flex:none; width:clamp(260px, 30vw, 340px); display:flex; flex-direction:column; position:relative;
   background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
   overflow:hidden; aspect-ratio:auto;
   transition:width .28s ease, height .28s ease, opacity .22s ease, border-width .28s ease;
@@ -215,7 +216,7 @@ header.site .sub{color:var(--muted); font-size:13px}
      the video+controls fit the display height; chat flexes into whatever's left. */
   .stage:not(.in-fs) .player-shell{flex:0 0 auto; min-width:0; align-self:flex-start}
   .stage:not(.in-fs) .chat:not(.off){
-    flex:1 1 auto; width:auto; min-width:250px; max-width:none; height:auto; align-self:stretch;
+    flex:1 1 auto; width:auto; min-width:220px; max-width:none; height:auto; align-self:stretch;
     border-left:1px solid var(--border);
   }
   .ctrl-menu .cm-edge{display:flex}   /* show the <--> fill-edges toggle here */
@@ -1116,7 +1117,7 @@ function sizeStageLandscape(){
   // Video wants full display height; but chat's min-width wins — if the row is too
   // narrow to give the video its full-height width AND chat CHAT_MIN, shrink the video
   // (below full height) so chat keeps CHAT_MIN. Only applies while chat is visible.
-  const CHAT_MIN = 250;
+  const CHAT_MIN = 220;
   let videoH = Math.max(80, Math.round(lsHeight - ctrlH));
   let shellW = Math.round(videoH * 16 / 9);
   if (!chatEl.classList.contains('off')){
