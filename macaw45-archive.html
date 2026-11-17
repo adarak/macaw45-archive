@@ -771,9 +771,16 @@ function setupControls(v){
   const scrub = q('.scrub'), timeEl = q('.ctime'), vol = q('.vol');
   const playBtn = q('[data-a=play]'), muteBtn = q('[data-a=mute]'), chatBtn = q('[data-a=chat]');
 
+  // Usable duration. iOS native HLS can report NaN/Infinity for a while (the bar is
+  // then unseekable), so fall back to the seekable range, then the catalog length.
+  const dur = () => {
+    const d = p.duration(); if (isFinite(d) && d > 0) return d;
+    try { const sk = p.seekable(); if (sk && sk.length && isFinite(sk.end(sk.length - 1))) return sk.end(sk.length - 1); } catch (e) {}
+    return v.duration_seconds || 0;
+  };
   playBtn.addEventListener('click', () => p.paused() ? p.play() : p.pause());
   q('[data-a=back]').addEventListener('click', () => { p.currentTime(Math.max(0, p.currentTime() - 15)); showControls(); });
-  q('[data-a=fwd]').addEventListener('click', () => { p.currentTime(Math.min(p.duration() || Infinity, p.currentTime() + 15)); showControls(); });
+  q('[data-a=fwd]').addEventListener('click', () => { p.currentTime(Math.min(dur() || Infinity, p.currentTime() + 15)); showControls(); });
   const header = document.querySelector('header.site');
   let mobileChatAuto = false;   // auto-open chat once on the first mobile play
   p.on('play', () => {
@@ -805,7 +812,7 @@ function setupControls(v){
   updMute(); paintVol();
 
   function paint(){
-    const d = p.duration() || 0, f = d ? Math.min(1, p.currentTime() / d) : 0;
+    const d = dur(), f = d ? Math.min(1, p.currentTime() / d) : 0;
     played.style.width = (f * 100) + '%';
     handle.style.left = (f * 100) + '%';
     try { buf.style.width = (d ? Math.min(1, p.bufferedEnd() / d) * 100 : 0) + '%'; } catch (e) {}
@@ -820,11 +827,13 @@ function setupControls(v){
   const seekTo = (x) => {
     const r = scrub.getBoundingClientRect();
     const f = Math.min(1, Math.max(0, (x - r.left) / r.width));
-    const d = p.duration(); if (d) p.currentTime(f * d);
+    const d = dur(); if (d) p.currentTime(f * d);
   };
   scrub.addEventListener('pointerdown', (e) => { dragging = true; bar.classList.add('scrubbing'); try { scrub.setPointerCapture(e.pointerId); } catch (_) {} seekTo(e.clientX); paint(); });
   scrub.addEventListener('pointermove', (e) => { if (dragging){ seekTo(e.clientX); paint(); } });
-  scrub.addEventListener('pointerup', () => { dragging = false; bar.classList.remove('scrubbing'); paint(); });
+  const endDrag = () => { dragging = false; bar.classList.remove('scrubbing'); paint(); };
+  scrub.addEventListener('pointerup', endDrag);
+  scrub.addEventListener('pointercancel', endDrag);
 
   chatBtn.classList.toggle('on', chatOn);
   chatBtn.addEventListener('click', () => {
