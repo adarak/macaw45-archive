@@ -1008,19 +1008,26 @@ function renderFeatured(v){
   resumeWant = null;
   if (seekTo != null && vjs){
     resumeWant = seekTo;
-    const p = vjs, started = Date.now();
+    const p = vjs;
+    let started = 0;
     const settle = () => {
       if (resumeWant == null) return;
       const ct = p.currentTime() || 0;
       if (Math.abs(ct - resumeWant) < 3){ resumeWant = null; return; }
-      if (Date.now() - started > 120000 && !p.paused() && ct > 30){ resumeWant = null; return; }   // give up
+      if (Date.now() - started > 120000 && ct > 30){ resumeWant = null; return; }   // give up
       try { p.currentTime(resumeWant); } catch (e) {}
     };
+    // Don't seek until the user's first play. On iOS, seeking the page-load video
+    // before any gesture wedges the element: spinner while paused, then audio from
+    // 0 while the bar shows the resume point, and all later seeks do nothing.
     vjs.ready(() => {
-      p.one('loadedmetadata', settle);
-      p.on('canplay', settle);
-      p.on('playing', settle);
-      p.on('timeupdate', () => { if (resumeWant != null && !p.seeking()) settle(); });
+      p.one('play', () => {
+        started = Date.now();
+        if (p.readyState() >= 1) settle(); else p.one('loadedmetadata', settle);
+        p.on('canplay', settle);
+        p.on('playing', settle);
+        p.on('timeupdate', () => { if (resumeWant != null && !p.seeking()) settle(); });
+      });
     });
   }
   if (vjs){
