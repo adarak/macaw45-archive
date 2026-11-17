@@ -749,6 +749,7 @@ shell.addEventListener('pointerup', (e) => {
   if (Math.hypot(e.clientX - st.x, e.clientY - st.y) > 12 || Date.now() - st.t > 600) return;   // a drag/scroll, not a tap
   touchTapAt = Date.now();
   if (curBar && curBar.classList.contains('hide')){ showControls(); return; }
+  if (wakeFresh()) return;
   vjs.paused() ? vjs.play() : vjs.pause();
   showControls();
 }, true);
@@ -757,6 +758,7 @@ shell.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') sh
 shell.addEventListener('click', (e) => {
   if (!vjs || inCtrl(e)) return;
   if (Date.now() - touchTapAt < 700) return;   // already handled as a touch tap
+  if (wakeFresh()) return;
   vjs.paused() ? vjs.play() : vjs.pause();
   showControls();
 });
@@ -764,7 +766,7 @@ document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || !vjs) return;
   const k = e.key;
-  if (k === ' ' || k === 'k'){ e.preventDefault(); vjs.paused() ? vjs.play() : vjs.pause(); }
+  if (k === ' ' || k === 'k'){ e.preventDefault(); if (wakeFresh()) return; vjs.paused() ? vjs.play() : vjs.pause(); }
   else if (k === 'm'){ vjs.muted(!vjs.muted()); }
   else if (k === 'Escape'){ if (document.fullscreenElement || document.webkitFullscreenElement) toggleStageFullscreen(); }
   else if (k === 'ArrowLeft'){ resumeWant = null; vjs.currentTime(Math.max(0, vjs.currentTime() - 15)); }
@@ -816,7 +818,7 @@ function setupControls(v){
     try { const sk = p.seekable(); if (sk && sk.length && isFinite(sk.end(sk.length - 1))) return sk.end(sk.length - 1); } catch (e) {}
     return v.duration_seconds || 0;
   };
-  playBtn.addEventListener('click', () => p.paused() ? p.play() : p.pause());
+  playBtn.addEventListener('click', () => { if (wakeFresh()) return; p.paused() ? p.play() : p.pause(); });
   q('[data-a=back]').addEventListener('click', () => { resumeWant = null; p.currentTime(Math.max(0, p.currentTime() - 15)); showControls(); });
   q('[data-a=fwd]').addEventListener('click', () => { resumeWant = null; p.currentTime(Math.min(dur() || Infinity, p.currentTime() + 15)); showControls(); });
   const header = document.querySelector('header.site');
@@ -979,6 +981,25 @@ function setupControls(v){
   })();
 
   q('[data-a=fs]').addEventListener('click', toggleStageFullscreen);
+}
+
+// Safari / iOS native HLS: a player built on page load (no user gesture yet)
+// gets wedged — audio from 0 while the bar shows another time, dead seeks — while
+// one built inside a tap (clicking a card) works. So the first play of the
+// page-load video rebuilds it fresh inside that tap, exactly like a card click.
+let freshNative = false;
+function wakeFresh(){
+  if (!freshNative) return false;
+  freshNative = false;
+  const v = byId[state.current];
+  if (!v) return false;
+  pendingSeek = resumeWant;      // keep a deep-link ?t / resume target across the rebuild
+  activeVideo = null;            // skip the outgoing-position save (it'd be ~0 and wipe the resume)
+  renderFeatured(v);
+  markActive();
+  const el = shell.querySelector('video');
+  try { const pr = el && el.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) {}
+  return true;
 }
 
 function renderFeatured(v){
@@ -1546,6 +1567,7 @@ function markActive(){
 }
 
 function selectVideo(id, push, seekTo){
+  freshNative = false;           // a selection made by the user builds the player inside their gesture
   const v = byId[String(id)];
   if (!v) return;
   state.current = String(id);
@@ -1609,6 +1631,7 @@ function init(){
   const linked = p.id && byId[p.id];
   const first = linked ? p.id : VIDEOS.slice().sort(byNewest)[0].vodid;
   selectVideo(first, false, linked ? p.t : null);
+  freshNative = !!document.createElement('video').canPlayType('application/vnd.apple.mpegurl');
   // normalise a legacy "#id" link (or a bare "?id") to the canonical "?v=id" form
   if (linked) history.replaceState(null, '', deepLink(first, p.t || 0));
   renderGrid();
