@@ -998,7 +998,10 @@ function wakeFresh(){
   renderFeatured(v);
   markActive();
   const el = shell.querySelector('video');
-  try { const pr = el && el.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) {}
+  const go = (fn) => { try { const pr = fn(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) {} };
+  go(() => el && el.play());   // claim the gesture now…
+  // …and again once video.js has attached the source (its src() load() aborts the first)
+  if (vjs){ const pl = vjs; pl.ready(() => { if (pl.paused()) go(() => pl.play()); }); pl.one('loadstart', () => { if (pl.paused()) go(() => pl.play()); }); }
   return true;
 }
 
