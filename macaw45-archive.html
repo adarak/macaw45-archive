@@ -669,16 +669,31 @@ function enterNativeVideoFullscreen(){
   const clear = () => { videoEl.controls = false; };
   videoEl.addEventListener('webkitendfullscreen', clear, { once: true });          // iOS
   document.addEventListener('fullscreenchange', function h(){ if (!document.fullscreenElement){ clear(); document.removeEventListener('fullscreenchange', h); } });
-  if (typeof videoEl.webkitEnterFullscreen === 'function') videoEl.webkitEnterFullscreen();
-  else if (videoEl.requestFullscreen) videoEl.requestFullscreen();
+  try {
+    if (typeof videoEl.webkitEnterFullscreen === 'function'){ videoEl.webkitEnterFullscreen(); return; }
+  } catch (e) {
+    // iOS throws (InvalidStateError) until metadata has loaded — and it ignores
+    // preload, so an unplayed video has none. Start playback inside this tap and
+    // go fullscreen as soon as the metadata arrives.
+    if (vjs){
+      vjs.one('loadedmetadata', () => { try { videoEl.webkitEnterFullscreen(); } catch (e2) { clear(); } });
+      const pr = vjs.play(); if (pr && pr.catch) pr.catch(() => {});
+      return;
+    }
+  }
+  if (videoEl.requestFullscreen) videoEl.requestFullscreen().catch(clear);
   else if (videoEl.webkitRequestFullscreen) videoEl.webkitRequestFullscreen();
+  else clear();
 }
 
 function toggleStageFullscreen(){
   const stage = document.getElementById('stage');
   if (!stage) return;
   // Mobile: native <video> fullscreen (a <div> can't be fullscreened on iOS).
-  if (isMobile()){ enterNativeVideoFullscreen(); return; }
+  // Same when this browser can't fullscreen an element (older iPad/touch Safari).
+  const canStageFs = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled)
+    && !!(stage.requestFullscreen || stage.webkitRequestFullscreen);
+  if (isMobile() || !canStageFs){ enterNativeVideoFullscreen(); return; }
   // Desktop: fullscreen the stage div (keeps the chat alongside).
   if (document.fullscreenElement || document.webkitFullscreenElement){
     (document.exitFullscreen || document.webkitExitFullscreen || function(){}).call(document);
@@ -717,10 +732,17 @@ function showControls(){
   clearTimeout(ctrlHideT);
   if (vjs && !vjs.paused()) ctrlHideT = setTimeout(() => { if (curBar) curBar.classList.add('hide'); }, 2600);
 }
-shell.addEventListener('pointermove', showControls);
+// Mouse movement reveals the controls. Touch doesn't: a tap fires pointermove
+// before click, which used to un-hide the bar so the click then paused instead.
+let lastPtr = 'mouse';
+shell.addEventListener('pointerdown', (e) => { lastPtr = e.pointerType || 'mouse'; }, true);
+shell.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') showControls(); });
 shell.addEventListener('click', (e) => {
   if (!vjs || (e.target.closest && e.target.closest('.ctrl'))) return;
+  // Touch: a tap on hidden controls just brings them back; tap again to play/pause.
+  if (lastPtr !== 'mouse' && curBar && curBar.classList.contains('hide')){ showControls(); return; }
   vjs.paused() ? vjs.play() : vjs.pause();
+  showControls();
 });
 document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';
